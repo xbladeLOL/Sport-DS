@@ -723,63 +723,26 @@ document.addEventListener('DOMContentLoaded', () => {
     const state = session ? session.session_state : 'IDLE';
 
     const badge = document.getElementById('session-badge-status');
-    const btnStart = document.getElementById('btn-session-start');
-    const btnPause = document.getElementById('btn-session-pause');
-    const btnResume = document.getElementById('btn-session-resume');
-    const btnEnd = document.getElementById('btn-session-end');
-
-    if (!badge || !btnStart || !btnPause || !btnResume || !btnEnd) return;
+    if (!badge) return;
 
     if (state === 'IDLE') {
       badge.textContent = '▶️ Non démarrée';
       badge.className = 'session-status-badge badge-neutral';
-
-      btnStart.disabled = false;
-      btnPause.disabled = true;
-      btnPause.style.display = 'inline-block';
-      btnResume.disabled = true;
-      btnResume.style.display = 'none';
-      btnEnd.disabled = true;
-
       stopSessionTimer();
       formatTimerClock(0);
     } else if (state === 'ACTIVE') {
       badge.textContent = '⏱️ Séance en cours';
       badge.className = 'session-status-badge badge-success';
-
-      btnStart.disabled = true;
-      btnPause.disabled = false;
-      btnPause.style.display = 'inline-block';
-      btnResume.disabled = true;
-      btnResume.style.display = 'none';
-      btnEnd.disabled = false;
-
       startSessionTimer();
     } else if (state === 'PAUSED') {
       badge.textContent = '⏸️ Séance en pause';
       badge.className = 'session-status-badge badge-warning';
-
-      btnStart.disabled = true;
-      btnPause.disabled = true;
-      btnPause.style.display = 'none';
-      btnResume.disabled = false;
-      btnResume.style.display = 'inline-block';
-      btnEnd.disabled = false;
-
       stopSessionTimer();
       formatTimerClock(session.duration_sec || 0);
     } else if (state === 'ENDED') {
       const mins = Math.round((session.duration_sec || 0) / 60);
       badge.textContent = `🏁 Terminée (${mins} min)`;
       badge.className = 'session-status-badge badge-info';
-
-      btnStart.disabled = true;
-      btnPause.disabled = true;
-      btnPause.style.display = 'inline-block';
-      btnResume.disabled = true;
-      btnResume.style.display = 'none';
-      btnEnd.disabled = true;
-
       stopSessionTimer();
       formatTimerClock(session.duration_sec || 0);
     }
@@ -825,68 +788,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ==================== EVENEMENTS INTERFACIAUX & MODALES ====================
   function initEventHandlers() {
-    // Boutons de contrôle de séance
-    const btnSessionStart = document.getElementById('btn-session-start');
-    if (btnSessionStart) {
-      btnSessionStart.addEventListener('click', async () => {
-        try {
-          const res = await fetch('/api/session/start', { method: 'POST' });
-          const data = await res.json();
-          if (data.success) {
-            updateSessionUI(data.session);
-          }
-        } catch (e) {
-          showToast('Erreur démarrage séance', 'error');
-        }
-      });
-    }
-
-    const btnSessionPause = document.getElementById('btn-session-pause');
-    if (btnSessionPause) {
-      btnSessionPause.addEventListener('click', async () => {
-        try {
-          const res = await fetch('/api/session/pause', { method: 'POST' });
-          const data = await res.json();
-          if (data.success) {
-            updateSessionUI(data.session);
-          }
-        } catch (e) {
-          showToast('Erreur mise en pause séance', 'error');
-        }
-      });
-    }
-
-    const btnSessionResume = document.getElementById('btn-session-resume');
-    if (btnSessionResume) {
-      btnSessionResume.addEventListener('click', async () => {
-        try {
-          const res = await fetch('/api/session/resume', { method: 'POST' });
-          const data = await res.json();
-          if (data.success) {
-            updateSessionUI(data.session);
-          }
-        } catch (e) {
-          showToast('Erreur reprise séance', 'error');
-        }
-      });
-    }
-
-    const btnSessionEnd = document.getElementById('btn-session-end');
-    if (btnSessionEnd) {
-      btnSessionEnd.addEventListener('click', async () => {
-        try {
-          const res = await fetch('/api/session/end', { method: 'POST' });
-          const data = await res.json();
-          if (data.success) {
-            updateSessionUI(data.session);
-            loadDashboardData();
-          }
-        } catch (e) {
-          showToast('Erreur fin de séance', 'error');
-        }
-      });
-    }
-
     // Boutons de période Dashboard Heatmap
     document.querySelectorAll('#heatmap-period-buttons .period-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {

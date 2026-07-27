@@ -72,27 +72,17 @@
     <!-- MAIN CONTENT CONTAINERS -->
     <main class="content-area">
 
-        <!-- CONTROLEUR DE SEANCE DE SPORT (DEBUT / PAUSE / REPRENDRE / FIN) -->
-        <div class="glass-card session-control-bar" style="margin-bottom: 20px; padding: 15px 20px;">
-          <div class="flex-between" style="align-items: center; flex-wrap: wrap; gap: 15px;">
-            <div class="session-info-status" style="display: flex; align-items: center; gap: 12px;">
-              <span class="session-status-badge badge-neutral" id="session-badge-status">▶️ Non démarrée</span>
-              <span class="session-timer-display" id="session-timer-clock" style="font-size: 1.4rem; font-weight: 700; font-family: monospace; color: var(--color-cyan, #06b6d4);">00:00:00</span>
-            </div>
-            <div class="session-control-buttons" style="display: flex; gap: 10px; flex-wrap: wrap;">
-              <button class="btn btn-success" id="btn-session-start">▶️ Début</button>
-              <button class="btn btn-secondary" id="btn-session-pause" disabled>⏸️ Pause</button>
-              <button class="btn btn-primary" id="btn-session-resume" disabled style="display: none;">▶️ Reprendre</button>
-              <button class="btn btn-danger" id="btn-session-end" disabled>⏹️ Fin</button>
-            </div>
-          </div>
-        </div>
-
         <!-- BARRE D'ACTIONS RAPIDES -->
         <div class="quick-actions-bar">
-          <div class="active-prog-info">
-            <span class="label">Programme Actif :</span>
-            <span class="prog-tag" id="dash-active-prog-name">Chargement...</span>
+          <div class="active-prog-info" style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+            <div>
+              <span class="label">Programme Actif :</span>
+              <span class="prog-tag" id="dash-active-prog-name">Chargement...</span>
+            </div>
+            <div class="session-display-widget" style="display: flex; align-items: center; gap: 10px; margin-left: 10px;">
+              <span class="session-status-badge badge-neutral" id="session-badge-status">▶️ Non démarrée</span>
+              <span class="session-timer-display" id="session-timer-clock" style="font-size: 1.1rem; font-weight: 700; font-family: monospace; color: var(--color-cyan, #06b6d4);">00:00:00</span>
+            </div>
           </div>
           <div class="actions">
             <button class="btn btn-discord" id="btn-trigger-discord">
