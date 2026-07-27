@@ -85,11 +85,21 @@ function initSchema() {
   `);
 
   // Migration douce pour les bases SQLite existantes
-  try {
-    db.exec(`ALTER TABLE exercices ADD COLUMN increment_interval_weeks INTEGER DEFAULT 1`);
-  } catch (e) {
-    // La colonne existe déjà
-  }
+  const exerciseMigrations = [
+    'ALTER TABLE exercices ADD COLUMN target_reps INTEGER DEFAULT 1',
+    'ALTER TABLE exercices ADD COLUMN target_weight REAL DEFAULT 0',
+    'ALTER TABLE exercices ADD COLUMN increment_reps_per_week INTEGER DEFAULT 0',
+    'ALTER TABLE exercices ADD COLUMN increment_weight_per_week REAL DEFAULT 0',
+    'ALTER TABLE exercices ADD COLUMN increment_interval_weeks INTEGER DEFAULT 1',
+    'ALTER TABLE exercices ADD COLUMN is_static INTEGER DEFAULT 0',
+    'ALTER TABLE exercices ADD COLUMN hold_time_sec INTEGER DEFAULT 0',
+    'ALTER TABLE exercices ADD COLUMN target_hold_time_sec INTEGER DEFAULT 0',
+    'ALTER TABLE exercices ADD COLUMN increment_hold_time_per_week INTEGER DEFAULT 0'
+  ];
+  exerciseMigrations.forEach(sql => {
+    try { db.exec(sql); } catch (e) {}
+  });
+
   try { db.exec(`ALTER TABLE day_logs ADD COLUMN start_time TEXT`); } catch (e) {}
   try { db.exec(`ALTER TABLE day_logs ADD COLUMN pause_start_time TEXT`); } catch (e) {}
   try { db.exec(`ALTER TABLE day_logs ADD COLUMN accumulated_pause_sec INTEGER DEFAULT 0`); } catch (e) {}
@@ -210,10 +220,37 @@ function getExercisesByProgrammeAndDay(programmeId, dayOfWeek) {
 }
 
 function addExercise(data) {
-  const maxOrder = db.prepare(`
+  const programmeId = parseInt(data.programme_id, 10);
+  const dayOfWeek = parseInt(data.day_of_week, 10);
+
+  if (isNaN(programmeId) || isNaN(dayOfWeek)) {
+    throw new Error('Identifiant de programme ou jour de la semaine invalide.');
+  }
+
+  const progExists = db.prepare('SELECT id FROM programmes WHERE id = ?').get(programmeId);
+  if (!progExists) {
+    throw new Error(`Le programme (ID ${programmeId}) n'existe pas dans la base de données.`);
+  }
+
+  const maxOrderRow = db.prepare(`
     SELECT COALESCE(MAX(order_index), 0) as max_ord 
     FROM exercices WHERE programme_id = ? AND day_of_week = ?
-  `).get(data.programme_id, data.day_of_week).max_ord;
+  `).get(programmeId, dayOfWeek);
+  const maxOrder = maxOrderRow ? maxOrderRow.max_ord : 0;
+
+  const sets = parseInt(data.sets, 10) || 1;
+  const reps = parseInt(data.reps, 10) || 1;
+  const targetReps = parseInt(data.target_reps, 10) || reps;
+  const weightKg = parseFloat(data.weight_kg) || 0;
+  const targetWeight = parseFloat(data.target_weight) || weightKg;
+  const incReps = parseInt(data.increment_reps_per_week, 10) || 0;
+  const incWeight = parseFloat(data.increment_weight_per_week) || 0;
+  const incInterval = Math.max(1, parseInt(data.increment_interval_weeks, 10) || 1);
+  const durationSec = parseInt(data.duration_sec, 10) || 0;
+  const isStatic = data.is_static ? 1 : 0;
+  const holdTimeSec = parseInt(data.hold_time_sec, 10) || 0;
+  const targetHoldTimeSec = parseInt(data.target_hold_time_sec, 10) || holdTimeSec;
+  const incHoldTime = parseInt(data.increment_hold_time_per_week, 10) || 0;
 
   const stmt = db.prepare(`
     INSERT INTO exercices (
@@ -225,28 +262,28 @@ function addExercise(data) {
   `);
 
   const info = stmt.run(
-    data.programme_id,
-    data.day_of_week,
-    data.name,
-    data.description || '',
-    data.sets || 1,
-    data.reps || 1,
-    data.target_reps || data.reps || 1,
-    data.target_weight || data.weight_kg || 0,
-    data.increment_reps_per_week || 0,
-    data.increment_weight_per_week || 0,
-    data.increment_interval_weeks || 1,
-    data.duration_sec || 0,
-    data.weight_kg || 0,
-    data.comments || '',
+    programmeId,
+    dayOfWeek,
+    String(data.name || '').trim(),
+    String(data.description || '').trim(),
+    sets,
+    reps,
+    targetReps,
+    targetWeight,
+    incReps,
+    incWeight,
+    incInterval,
+    durationSec,
+    weightKg,
+    String(data.comments || '').trim(),
     maxOrder + 1,
-    data.is_static ? 1 : 0,
-    data.hold_time_sec || 0,
-    data.target_hold_time_sec || data.hold_time_sec || 0,
-    data.increment_hold_time_per_week || 0
+    isStatic,
+    holdTimeSec,
+    targetHoldTimeSec,
+    incHoldTime
   );
 
-  addLog(`Exercice ajouté : ${data.name} (Jour ${data.day_of_week})`, 'INFO');
+  addLog(`Exercice ajouté : ${data.name} (Jour ${dayOfWeek})`, 'INFO');
   return info.lastInsertRowid;
 }
 

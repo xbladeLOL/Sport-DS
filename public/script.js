@@ -870,48 +870,70 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('form-exercise').addEventListener('submit', async (e) => {
       e.preventDefault();
       const exId = document.getElementById('ex-id').value;
-      const selectedProgId = parseInt(document.getElementById('prog-select').value, 10);
+
+      let selectedProgId = parseInt(document.getElementById('prog-select').value, 10);
+      if (isNaN(selectedProgId) || !selectedProgId) {
+        selectedProgId = activeProgrammeId;
+      }
+
+      if (!selectedProgId) {
+        showToast('Veuillez d\'abord sélectionner ou créer un programme.', 'error');
+        return;
+      }
+
       const isStatic = document.getElementById('ex-type').value === '1';
+
+      const parseNum = (val, isFloat = false) => {
+        if (!val) return 0;
+        const sanitized = String(val).replace(',', '.');
+        const num = isFloat ? parseFloat(sanitized) : parseInt(sanitized, 10);
+        return isNaN(num) ? 0 : num;
+      };
 
       const payload = {
         programme_id: selectedProgId,
-        day_of_week: currentPlannerDay,
-        name: document.getElementById('ex-name').value,
-        description: document.getElementById('ex-desc').value,
-        sets: parseInt(document.getElementById('ex-sets').value, 10),
-        reps: isStatic ? 1 : parseInt(document.getElementById('ex-reps').value || '1', 10),
-        weight_kg: parseFloat(document.getElementById('ex-weight').value || '0'),
-        increment_reps_per_week: isStatic ? 0 : parseInt(document.getElementById('ex-inc-reps').value || '0', 10),
-        increment_weight_per_week: parseFloat(document.getElementById('ex-inc-weight').value || '0'),
-        increment_interval_weeks: parseInt(document.getElementById('ex-inc-interval').value || '1', 10),
-        duration_sec: parseInt(document.getElementById('ex-duration').value || '0', 10),
-        comments: document.getElementById('ex-comments').value,
+        day_of_week: currentPlannerDay || 1,
+        name: document.getElementById('ex-name').value.trim(),
+        description: document.getElementById('ex-desc').value.trim(),
+        sets: parseNum(document.getElementById('ex-sets').value) || 1,
+        reps: isStatic ? 1 : (parseNum(document.getElementById('ex-reps').value) || 1),
+        weight_kg: parseNum(document.getElementById('ex-weight').value, true),
+        increment_reps_per_week: isStatic ? 0 : parseNum(document.getElementById('ex-inc-reps').value),
+        increment_weight_per_week: parseNum(document.getElementById('ex-inc-weight').value, true),
+        increment_interval_weeks: parseNum(document.getElementById('ex-inc-interval').value) || 1,
+        duration_sec: parseNum(document.getElementById('ex-duration').value),
+        comments: document.getElementById('ex-comments').value.trim(),
         is_static: isStatic ? 1 : 0,
-        hold_time_sec: isStatic ? parseInt(document.getElementById('ex-hold').value || '0', 10) : 0,
-        target_hold_time_sec: isStatic ? parseInt(document.getElementById('ex-hold').value || '0', 10) : 0,
-        increment_hold_time_per_week: isStatic ? parseInt(document.getElementById('ex-inc-hold').value || '0', 10) : 0
+        hold_time_sec: isStatic ? parseNum(document.getElementById('ex-hold').value) : 0,
+        target_hold_time_sec: isStatic ? parseNum(document.getElementById('ex-hold').value) : 0,
+        increment_hold_time_per_week: isStatic ? parseNum(document.getElementById('ex-inc-hold').value) : 0
       };
 
       try {
+        let res;
         if (exId) {
-          await fetch(`/api/exercices/${exId}`, {
+          res = await fetch(`/api/exercices/${exId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
           });
-          showToast('Exercice modifié avec succès.', 'success');
         } else {
-          await fetch('/api/exercices', {
+          res = await fetch('/api/exercices', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
           });
-          showToast('Exercice ajouté avec succès.', 'success');
         }
-        closeExerciseModal();
-        loadPlannerData();
+        const data = await res.json();
+        if (data.success) {
+          showToast(exId ? 'Exercice modifié avec succès.' : 'Exercice ajouté avec me succès.', 'success');
+          closeExerciseModal();
+          loadPlannerData();
+        } else {
+          showToast(data.error || 'Erreur lors de la sauvegarde de l\'exercice.', 'error');
+        }
       } catch (err) {
-        showToast('Erreur lors de la sauvegarde de l exercice.', 'error');
+        showToast('Erreur serveur lors de la sauvegarde de l\'exercice.', 'error');
       }
     });
 
