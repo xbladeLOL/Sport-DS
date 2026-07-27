@@ -378,15 +378,24 @@
 
         <!-- SECTION SURCHARGE PROGRESSIVE -->
         <fieldset class="form-fieldset">
-          <legend>📈 Objectifs & Surcharge Progressive (Hebdomadaire)</legend>
+          <legend>📈 Objectifs & Surcharge Progressive</legend>
+          <div class="form-group">
+            <label for="ex-inc-interval">Fréquence de la surcharge</label>
+            <select id="ex-inc-interval" class="form-control">
+              <option value="1">Toutes les semaines (1 sem)</option>
+              <option value="2">Toutes les 2 semaines</option>
+              <option value="3">Toutes les 3 semaines</option>
+              <option value="4">Tous les mois (4 sem)</option>
+            </select>
+          </div>
           <div class="form-row-2">
             <div class="form-group">
-              <label for="ex-inc-reps">+ Reps / Semaine</label>
-              <input type="number" id="ex-inc-reps" class="form-control" min="0" value="0" placeholder="ex: 1 (pour +1 rep/sem)">
+              <label for="ex-inc-reps">+ Reps par période</label>
+              <input type="number" id="ex-inc-reps" class="form-control" min="0" value="0" placeholder="ex: 1 (pour +1 rep)">
             </div>
             <div class="form-group">
-              <label for="ex-inc-weight">+ Poids (kg) / Semaine</label>
-              <input type="number" id="ex-inc-weight" class="form-control" step="0.5" min="0" value="0" placeholder="ex: 2 (pour +2 kg/sem)">
+              <label for="ex-inc-weight">+ Poids (kg) par période</label>
+              <input type="number" id="ex-inc-weight" class="form-control" step="0.5" min="0" value="0" placeholder="ex: 2 (pour +2 kg)">
             </div>
           </div>
         </fieldset>

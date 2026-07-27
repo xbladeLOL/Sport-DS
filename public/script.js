@@ -270,7 +270,12 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         scales: {
           x: { ticks: { color: '#64748b' }, grid: { color: 'rgba(255,255,255,0.05)' } },
-          y: { ticks: { color: '#64748b', stepSize: 1 }, grid: { color: 'rgba(255,255,255,0.05)' } }
+          y: {
+            min: 0,
+            beginAtZero: true,
+            ticks: { color: '#64748b', stepSize: 1, precision: 0 },
+            grid: { color: 'rgba(255,255,255,0.05)' }
+          }
         }
       }
     });
@@ -350,9 +355,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
       let progPill = '';
       if (ex.increment_reps_per_week > 0 || ex.increment_weight_per_week > 0) {
+        const interval = ex.increment_interval_weeks || 1;
+        const intervalLabels = { 1: 'sem', 2: '2 sem', 3: '3 sem', 4: 'mois' };
+        const unitLabel = intervalLabels[interval] || `${interval} sem`;
+
         const parts = [];
-        if (ex.increment_reps_per_week > 0) parts.push(`+${ex.increment_reps_per_week} rep/sem`);
-        if (ex.increment_weight_per_week > 0) parts.push(`+${ex.increment_weight_per_week} kg/sem`);
+        if (ex.increment_reps_per_week > 0) parts.push(`+${ex.increment_reps_per_week} rep / ${unitLabel}`);
+        if (ex.increment_weight_per_week > 0) parts.push(`+${ex.increment_weight_per_week} kg / ${unitLabel}`);
         progPill = `<span class="pill progression">📈 ${parts.join(' | ')}</span>`;
       }
 
@@ -594,8 +603,13 @@ document.addEventListener('DOMContentLoaded', () => {
         maintainAspectRatio: false,
         plugins: { legend: { display: false } },
         scales: {
-          x: { ticks: { color: '#64748b' } },
-          y: { ticks: { color: '#64748b' } }
+          x: { ticks: { color: '#64748b' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+          y: {
+            min: 0,
+            beginAtZero: true,
+            ticks: { color: '#64748b', precision: 0 },
+            grid: { color: 'rgba(255,255,255,0.05)' }
+          }
         }
       }
     });
@@ -745,6 +759,7 @@ document.addEventListener('DOMContentLoaded', () => {
         weight_kg: parseFloat(document.getElementById('ex-weight').value || '0'),
         increment_reps_per_week: parseInt(document.getElementById('ex-inc-reps').value || '0', 10),
         increment_weight_per_week: parseFloat(document.getElementById('ex-inc-weight').value || '0'),
+        increment_interval_weeks: parseInt(document.getElementById('ex-inc-interval').value || '1', 10),
         duration_sec: parseInt(document.getElementById('ex-duration').value || '0', 10),
         comments: document.getElementById('ex-comments').value
       };
@@ -888,12 +903,14 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('ex-weight').value = ex.weight_kg || 0;
       document.getElementById('ex-inc-reps').value = ex.increment_reps_per_week || 0;
       document.getElementById('ex-inc-weight').value = ex.increment_weight_per_week || 0;
+      document.getElementById('ex-inc-interval').value = ex.increment_interval_weeks || 1;
       document.getElementById('ex-duration').value = ex.duration_sec || 90;
       document.getElementById('ex-comments').value = ex.comments || '';
     } else {
       document.getElementById('modal-ex-title').textContent = 'Ajouter un Exercice';
       document.getElementById('form-exercise').reset();
       document.getElementById('ex-id').value = '';
+      document.getElementById('ex-inc-interval').value = 1;
     }
   }
 

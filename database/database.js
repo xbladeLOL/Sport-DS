@@ -38,6 +38,7 @@ function initSchema() {
       target_weight REAL DEFAULT 0,
       increment_reps_per_week INTEGER DEFAULT 0,
       increment_weight_per_week REAL DEFAULT 0,
+      increment_interval_weeks INTEGER DEFAULT 1,
       duration_sec INTEGER DEFAULT 0,
       weight_kg REAL DEFAULT 0,
       comments TEXT,
@@ -72,6 +73,13 @@ function initSchema() {
       level TEXT DEFAULT 'INFO'
     );
   `);
+
+  // Migration douce pour les bases SQLite existantes
+  try {
+    db.exec(`ALTER TABLE exercices ADD COLUMN increment_interval_weeks INTEGER DEFAULT 1`);
+  } catch (e) {
+    // La colonne existe déjà
+  }
 
   // Initialisation des paramètres par défaut
   const setParamStmt = db.prepare('INSERT OR IGNORE INTO parametres (key, value) VALUES (?, ?)');
@@ -194,9 +202,9 @@ function addExercise(data) {
   const stmt = db.prepare(`
     INSERT INTO exercices (
       programme_id, day_of_week, name, description, sets, reps, 
-      target_reps, target_weight, increment_reps_per_week, increment_weight_per_week,
+      target_reps, target_weight, increment_reps_per_week, increment_weight_per_week, increment_interval_weeks,
       duration_sec, weight_kg, comments, order_index
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const info = stmt.run(
@@ -210,6 +218,7 @@ function addExercise(data) {
     data.target_weight || data.weight_kg || 0,
     data.increment_reps_per_week || 0,
     data.increment_weight_per_week || 0,
+    data.increment_interval_weeks || 1,
     data.duration_sec || 0,
     data.weight_kg || 0,
     data.comments || '',
@@ -225,7 +234,7 @@ function updateExercise(id, data) {
     UPDATE exercices SET
       name = ?, description = ?, sets = ?, reps = ?,
       target_reps = ?, target_weight = ?, 
-      increment_reps_per_week = ?, increment_weight_per_week = ?,
+      increment_reps_per_week = ?, increment_weight_per_week = ?, increment_interval_weeks = ?,
       duration_sec = ?, weight_kg = ?, comments = ?
     WHERE id = ?
   `);
@@ -239,6 +248,7 @@ function updateExercise(id, data) {
     data.target_weight || data.weight_kg || 0,
     data.increment_reps_per_week || 0,
     data.increment_weight_per_week || 0,
+    data.increment_interval_weeks || 1,
     data.duration_sec || 0,
     data.weight_kg || 0,
     data.comments || '',
@@ -282,9 +292,9 @@ function copyDay(programmeId, sourceDayOfWeek, targetDayOfWeek) {
     db.prepare(`
       INSERT INTO exercices (
         programme_id, day_of_week, name, description, sets, reps, 
-        target_reps, target_weight, increment_reps_per_week, increment_weight_per_week,
+        target_reps, target_weight, increment_reps_per_week, increment_weight_per_week, increment_interval_weeks,
         duration_sec, weight_kg, comments, order_index
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       programmeId,
       targetDayOfWeek,
@@ -296,6 +306,7 @@ function copyDay(programmeId, sourceDayOfWeek, targetDayOfWeek) {
       ex.target_weight,
       ex.increment_reps_per_week,
       ex.increment_weight_per_week,
+      ex.increment_interval_weeks || 1,
       ex.duration_sec,
       ex.weight_kg,
       ex.comments,
@@ -308,9 +319,12 @@ function copyDay(programmeId, sourceDayOfWeek, targetDayOfWeek) {
 
 // --- SURCHARGE PROGRESSIVE ET CALCUL D'OBJECTIFS ---
 function getCalculatedTarget(exercise, weekNumber = 1) {
+  const interval = Math.max(1, exercise.increment_interval_weeks || 1);
   const weekDiff = Math.max(0, weekNumber - 1);
-  const targetReps = (exercise.target_reps || exercise.reps || 1) + (weekDiff * (exercise.increment_reps_per_week || 0));
-  const targetWeight = (exercise.target_weight || exercise.weight_kg || 0) + (weekDiff * (exercise.increment_weight_per_week || 0));
+  const incrementsApplied = Math.floor(weekDiff / interval);
+
+  const targetReps = (exercise.target_reps || exercise.reps || 1) + (incrementsApplied * (exercise.increment_reps_per_week || 0));
+  const targetWeight = (exercise.target_weight || exercise.weight_kg || 0) + (incrementsApplied * (exercise.increment_weight_per_week || 0));
   return {
     targetReps,
     targetWeight: Math.round(targetWeight * 10) / 10
