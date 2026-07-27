@@ -1,0 +1,29 @@
+{
+  "name": "sport-ds",
+  "version": "1.0.0",
+  "description": "Tableau de bord de suivi sportif synchronisé avec Discord",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [
+    "fitness",
+    "discord",
+    "dashboard",
+    "sqlite",
+    "websocket",
+    "streak"
+  ],
+  "author": "Antigravity",
+  "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "discord.js": "^14.15.3",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "multer": "^1.4.5-lts.1",
+    "node-cron": "^3.0.3",
+    "ws": "^8.17.0"
+  }
+}

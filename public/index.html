@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sport+DS — Tableau de Bord & Bot Discord</title>
+  <meta name="description" content="Tableau de bord de suivi sportif moderne synchronisé en temps réel avec Discord, SQLite et WebSockets.">
+  
+  <!-- Font Google Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Chart.js via CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- BARRE DE NAVIGATION HEADER -->
+    <header class="main-header">
+      <div class="brand">
+        <div class="logo-icon">🏋️</div>
+        <div class="brand-text">
+          <h1>Sport+DS</h1>
+          <span class="sub-title">Discord & Web Sync</span>
+        </div>
+      </div>
+
+      <!-- BADGES STREAK & WEBSOCKET -->
+      <div class="header-badges">
+        <div class="streak-badge current" id="badge-current-streak" title="Streak actuelle de jours réussis d'affilée">
+          <span class="badge-icon">🔥</span>
+          <div class="badge-content">
+            <span class="badge-value" id="val-current-streak">0</span>
+            <span class="badge-label">Streak Actuelle</span>
+          </div>
+        </div>
+
+        <div class="streak-badge best" id="badge-best-streak" title="Meilleure streak atteinte">
+          <span class="badge-icon">🏆</span>
+          <div class="badge-content">
+            <span class="badge-value" id="val-best-streak">0</span>
+            <span class="badge-label">Meilleure Streak</span>
+          </div>
+        </div>
+
+        <div class="ws-status-indicator online" id="ws-indicator" title="Statut de la connexion WebSocket en temps réel">
+          <span class="pulse-dot"></span>
+          <span id="ws-status-text">Temps réel actif</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- ONGLETS DE NAVIGATION PRINCIPAUX -->
+    <nav class="main-nav">
+      <button class="nav-btn active" data-tab="tab-dashboard">
+        <span class="nav-icon">📊</span> Tableau de bord
+      </button>
+      <button class="nav-btn" data-tab="tab-planner">
+        <span class="nav-icon">📅</span> Programme Hebdo
+      </button>
+      <button class="nav-btn" data-tab="tab-stats">
+        <span class="nav-icon">📈</span> Statistiques & Heatmap
+      </button>
+      <button class="nav-btn" data-tab="tab-settings">
+        <span class="nav-icon">⚙️</span> Système & Backups
+      </button>
+    </nav>
+
+    <!-- MAIN CONTENT CONTAINERS -->
+    <main class="content-area">
+
+      <!-- ==================== ONGLET 1: TABLEAU DE BORD ==================== -->
+      <section id="tab-dashboard" class="tab-pane active">
+        <!-- BARRE D'ACTIONS RAPIDES -->
+        <div class="quick-actions-bar">
+          <div class="active-prog-info">
+            <span class="label">Programme Actif :</span>
+            <span class="prog-tag" id="dash-active-prog-name">Chargement...</span>
+          </div>
+          <div class="actions">
+            <button class="btn btn-discord" id="btn-trigger-discord">
+              <span>🤖</span> Envoyer sur Discord
+            </button>
+            <button class="btn btn-primary" id="btn-quick-add-ex">
+              <span>➕</span> Nouvel exercice
+            </button>
+          </div>
+        </div>
+
+        <!-- GRILLE DE CARTES KPI STATISTIQUES -->
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-icon cyan">🎯</div>
+            <div class="kpi-info">
+              <span class="kpi-title">Exercices Validés</span>
+              <span class="kpi-value" id="kpi-done-count">0</span>
+              <span class="kpi-sub" id="kpi-success-rate">0% de réussite</span>
+            </div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-icon emerald">⏱️</div>
+            <div class="kpi-info">
+              <span class="kpi-title">Temps d'Entraînement</span>
+              <span class="kpi-value" id="kpi-workout-time">0 min</span>
+              <span class="kpi-sub" id="kpi-avg-session">Moy. 0 min / séance</span>
+            </div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-icon purple">🏋️‍♂️</div>
+            <div class="kpi-info">
+              <span class="kpi-title">Séances Complétées</span>
+              <span class="kpi-value" id="kpi-sessions-count">0</span>
+              <span class="kpi-sub" id="kpi-total-ex-sub">0 exercices totaux</span>
+            </div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-icon amber">🔥</div>
+            <div class="kpi-info">
+              <span class="kpi-title">Discipline & Streak</span>
+              <span class="kpi-value" id="kpi-streak-val">0 jours</span>
+              <span class="kpi-sub" id="kpi-best-streak-sub">Record: 0 jours</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- CALENDRIER STYLE GITHUB HEATMAP GRID -->
+        <div class="glass-card heatmap-section">
+          <div class="card-header flex-between">
+            <div>
+              <h2>🟩 Calendrier de Complétion (Style GitHub)</h2>
+              <p class="section-desc">Statut visuel des séances passées (Vert = Réussi/Repos, Rouge = Échec/Manqué)</p>
+            </div>
+            <div class="period-selector" id="heatmap-period-buttons">
+              <button class="period-btn" data-days="7">1 Semaine</button>
+              <button class="period-btn" data-days="14">2 Semaines</button>
+              <button class="period-btn" data-days="21">3 Semaines</button>
+              <button class="period-btn active" data-days="30">1 Mois (30j)</button>
+            </div>
+          </div>
+
+          <!-- LA GRILLE HEATMAP -->
+          <div class="heatmap-grid-container" id="github-heatmap-grid">
+            <!-- Injecté dynamiquement par JavaScript -->
+          </div>
+
+          <div class="heatmap-legend">
+            <span class="legend-item"><span class="color-box success"></span> Réussi / Repos</span>
+            <span class="legend-item"><span class="color-box failed"></span> Échec / Manqué</span>
+            <span class="legend-item"><span class="color-box empty"></span> Sans données</span>
+          </div>
+        </div>
+
+        <!-- GRAPHIQUE APERÇU RAPIDE -->
+        <div class="glass-card chart-card">
+          <div class="card-header flex-between">
+            <h2>📈 Activité Quotidienne</h2>
+            <span class="badge-neutral" id="dash-chart-period-tag">30 Derniers Jours</span>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="overviewChart"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== ONGLET 2: PLANIFICATEUR HEBDOMADAIRE ==================== -->
+      <section id="tab-planner" class="tab-pane">
+        <!-- GESTION DES PROGRAMMES -->
+        <div class="glass-card prog-manager-card">
+          <div class="card-header flex-between">
+            <div class="prog-select-wrapper">
+              <label for="prog-select"><strong>Programme Sélectionné :</strong></label>
+              <select id="prog-select" class="form-control select-lg">
+                <!-- Injecté dynamiquement -->
+              </select>
+              <button class="btn btn-outline" id="btn-activate-prog">✔️ Définir comme Actif</button>
+            </div>
+            <div class="prog-actions">
+              <button class="btn btn-secondary" id="btn-new-prog">➕ Nouveau Programme</button>
+              <button class="btn btn-danger-ghost" id="btn-delete-prog">🗑️ Supprimer</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- SELECTEUR DES JOURS DE LA SEMAINE -->
+        <div class="days-tab-nav">
+          <button class="day-tab-btn active" data-day="1">Lundi</button>
+          <button class="day-tab-btn" data-day="2">Mardi</button>
+          <button class="day-tab-btn" data-day="3">Mercredi</button>
+          <button class="day-tab-btn" data-day="4">Jeudi</button>
+          <button class="day-tab-btn" data-day="5">Vendredi</button>
+          <button class="day-tab-btn" data-day="6">Samedi</button>
+          <button class="day-tab-btn" data-day="7">Dimanche</button>
+        </div>
+
+        <!-- CONTENU DU JOUR SELECTIONNE -->
+        <div class="glass-card day-content-card">
+          <div class="card-header flex-between">
+            <div>
+              <h2 id="current-day-title">🏋️ Exercices du Lundi</h2>
+              <p class="section-desc">Faites glisser-déposer les cartes pour réordonner les exercices</p>
+            </div>
+            <div class="day-actions">
+              <button class="btn btn-outline" id="btn-copy-day">📋 Copier cette journée</button>
+              <button class="btn btn-primary" id="btn-add-ex-day">➕ Ajouter un exercice</button>
+            </div>
+          </div>
+
+          <!-- LISTE DES EXERCICES (DRAG & DROP) -->
+          <div class="exercise-cards-list" id="exercise-list-container">
+            <!-- Cartes d'exercices générées dynamiquement -->
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== ONGLET 3: STATISTIQUES ET HEATMAP ==================== -->
+      <section id="tab-stats" class="tab-pane">
+        <div class="glass-card">
+          <div class="card-header flex-between">
+            <h2>📊 Analyses & Taux de Réussite Détaillés</h2>
+            <div class="period-selector" id="stats-period-buttons">
+              <button class="period-btn" data-days="7">7 Jours</button>
+              <button class="period-btn" data-days="14">14 Jours</button>
+              <button class="period-btn" data-days="21">21 Jours</button>
+              <button class="period-btn active" data-days="30">30 Jours</button>
+            </div>
+          </div>
+
+          <!-- RAPPORTS ET DOUGHNUT CHART -->
+          <div class="stats-charts-row">
+            <div class="chart-box">
+              <h3>Répartition Globale (Fait / Échec / Non Fait)</h3>
+              <div class="chart-wrapper-small">
+                <canvas id="donutChart"></canvas>
+              </div>
+            </div>
+            <div class="chart-box">
+              <h3>Évolution du Taux de Réussite</h3>
+              <div class="chart-wrapper-small">
+                <canvas id="lineChart"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- TABLEAUX DE REUSSITE PAR EXERCICE & PAR JOUR -->
+          <div class="tables-breakdown-row">
+            <!-- REUSSITE PAR EXERCICE -->
+            <div class="breakdown-card">
+              <h3>🏋️ Réussite par Exercice</h3>
+              <div class="table-responsive">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Exercice</th>
+                      <th>Effectués</th>
+                      <th>Total</th>
+                      <th>Taux</th>
+                    </tr>
+                  </thead>
+                  <tbody id="table-ex-breakdown">
+                    <!-- Généré dynamiquement -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- REUSSITE PAR JOUR DE LA SEMAINE -->
+            <div class="breakdown-card">
+              <h3>📅 Réussite par Jour de la Semaine</h3>
+              <div class="table-responsive">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Jour</th>
+                      <th>Taux de Réussite</th>
+                    </tr>
+                  </thead>
+                  <tbody id="table-day-breakdown">
+                    <!-- Généré dynamiquement -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== ONGLET 4: SYSTEME, LOGS ET BACKUPS ==================== -->
+      <section id="tab-settings" class="tab-pane">
+        <div class="settings-grid">
+          <!-- CARTE SAUVEGARDE & RESTAURATION -->
+          <div class="glass-card">
+            <div class="card-header">
+              <h2>💾 Sauvegarde & Restauration SQLite</h2>
+              <p class="section-desc">Exportez toute la base ou restaurez un fichier .db existant.</p>
+            </div>
+            <div class="backup-actions">
+              <a href="/api/backup/export" download class="btn btn-primary btn-block">
+                <span>📥</span> Exporter la Base SQLite (Download)
+              </a>
+
+              <hr class="divider">
+
+              <form id="form-import-db" class="import-form">
+                <label for="input-db-file"><strong>Restaurer un fichier .db :</strong></label>
+                <input type="file" id="input-db-file" name="database" accept=".db,.sqlite,.sqlite3" class="form-control" required>
+                <button type="submit" class="btn btn-warning btn-block" style="margin-top: 10px;">
+                  <span>📤</span> Importer et Restaurer
+                </button>
+              </form>
+            </div>
+
+            <h3 style="margin-top: 25px;">📂 Sauvegardes Automatiques Récentes (Dossier /backups/)</h3>
+            <ul class="backups-list" id="backups-file-list">
+              <!-- Liste dynamique des backups -->
+            </ul>
+          </div>
+
+          <!-- CARTE SYSTEM LOGS TERMINAL -->
+          <div class="glass-card">
+            <div class="card-header flex-between">
+              <h2>📜 Journal des Événements (Logs System)</h2>
+              <button class="btn btn-danger-ghost btn-sm" id="btn-clear-logs">Réinitialiser les logs</button>
+            </div>
+            <div class="logs-console" id="logs-console-window">
+              <!-- Flux de logs dynamique -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ==================== MODALES INTERACTIVES ==================== -->
+
+  <!-- MODALE AJOUTER / EDITER EXERCICE -->
+  <div class="modal-backdrop" id="modal-exercise">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modal-ex-title">Ajouter un Exercice</h3>
+        <button class="modal-close" id="btn-close-ex-modal">&times;</button>
+      </div>
+      <form id="form-exercise" class="modal-body">
+        <input type="hidden" id="ex-id">
+        <input type="hidden" id="ex-programme-id">
+        <input type="hidden" id="ex-day-of-week">
+
+        <div class="form-group">
+          <label for="ex-name">Nom de l'exercice *</label>
+          <input type="text" id="ex-name" class="form-control" placeholder="ex: Pompes, Dips, Squats..." required>
+        </div>
+
+        <div class="form-group">
+          <label for="ex-desc">Description (Optionnel)</label>
+          <input type="text" id="ex-desc" class="form-control" placeholder="ex: Mains écartées, dos bien droit">
+        </div>
+
+        <div class="form-row-3">
+          <div class="form-group">
+            <label for="ex-sets">Séries</label>
+            <input type="number" id="ex-sets" class="form-control" min="1" value="3" required>
+          </div>
+          <div class="form-group">
+            <label for="ex-reps">Répétitions</label>
+            <input type="number" id="ex-reps" class="form-control" min="1" value="12" required>
+          </div>
+          <div class="form-group">
+            <label for="ex-weight">Poids (kg)</label>
+            <input type="number" id="ex-weight" class="form-control" step="0.5" min="0" value="0">
+          </div>
+        </div>
+
+        <!-- SECTION SURCHARGE PROGRESSIVE -->
+        <fieldset class="form-fieldset">
+          <legend>📈 Objectifs & Surcharge Progressive (Hebdomadaire)</legend>
+          <div class="form-row-2">
+            <div class="form-group">
+              <label for="ex-inc-reps">+ Reps / Semaine</label>
+              <input type="number" id="ex-inc-reps" class="form-control" min="0" value="0" placeholder="ex: 1 (pour +1 rep/sem)">
+            </div>
+            <div class="form-group">
+              <label for="ex-inc-weight">+ Poids (kg) / Semaine</label>
+              <input type="number" id="ex-inc-weight" class="form-control" step="0.5" min="0" value="0" placeholder="ex: 2 (pour +2 kg/sem)">
+            </div>
+          </div>
+        </fieldset>
+
+        <div class="form-row-2">
+          <div class="form-group">
+            <label for="ex-duration">Temps de repos (sec)</label>
+            <input type="number" id="ex-duration" class="form-control" step="5" min="0" value="90">
+          </div>
+          <div class="form-group">
+            <label for="ex-comments">Commentaires</label>
+            <input type="text" id="ex-comments" class="form-control" placeholder="ex: Prendre 2 min si lourd">
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="btn-cancel-ex">Annuler</button>
+          <button type="submit" class="btn btn-primary" id="btn-save-ex">Enregistrer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODALE CREER PROGRAMME -->
+  <div class="modal-backdrop" id="modal-program">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Nouveau Programme</h3>
+        <button class="modal-close" id="btn-close-prog-modal">&times;</button>
+      </div>
+      <form id="form-program" class="modal-body">
+        <div class="form-group">
+          <label for="new-prog-name">Nom du programme *</label>
+          <input type="text" id="new-prog-name" class="form-control" placeholder="ex: Force, Maison, Cardio..." required>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="btn-cancel-prog">Annuler</button>
+          <button type="submit" class="btn btn-primary">Créer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODALE COPIER JOURNEE -->
+  <div class="modal-backdrop" id="modal-copy-day">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Copier la journée</h3>
+        <button class="modal-close" id="btn-close-copy-day-modal">&times;</button>
+      </div>
+      <form id="form-copy-day" class="modal-body">
+        <p>Copier tous les exercices de la journée actuelle vers :</p>
+        <div class="form-group">
+          <label for="target-day-select"><strong>Jour Cible :</strong></label>
+          <select id="target-day-select" class="form-control">
+            <option value="1">Lundi</option>
+            <option value="2">Mardi</option>
+            <option value="3">Mercredi</option>
+            <option value="4">Jeudi</option>
+            <option value="5">Vendredi</option>
+            <option value="6">Samedi</option>
+            <option value="7">Dimanche</option>
+          </select>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="btn-cancel-copy-day">Annuler</button>
+          <button type="submit" class="btn btn-primary">Copier</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- CONTENEUR DES TOAST NOTIFICATIONS -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <script src="script.js"></script>
+</body>
+</html>
