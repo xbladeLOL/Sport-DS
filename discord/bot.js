@@ -48,15 +48,17 @@ function getDayName(dayIndex) {
 // --- ENVOI DU PROGRAMME DU JOUR ---
 async function sendDailyProgram(channelId, activeProgrammeId, dayOfWeek, dateStr) {
   if (!isReady) {
-    db.addLog("Bot Discord non prêt. Impossible d'envoyer le message.", 'WARNING');
-    return null;
+    const errorMsg = "Le bot Discord n'est pas connecté ou pas prêt. Vérifiez DISCORD_TOKEN dans le fichier .env.";
+    db.addLog(errorMsg, 'WARNING');
+    return { success: false, error: errorMsg };
   }
 
   try {
-    const channel = await client.channels.fetch(channelId);
+    const channel = await client.channels.fetch(channelId).catch(() => null);
     if (!channel) {
-      db.addLog(`Salon Discord non trouvé pour l'ID ${channelId}`, 'ERROR');
-      return null;
+      const errorMsg = `Salon Discord introuvable pour l'ID ${channelId}. Vérifiez DISCORD_CHANNEL_ID dans le fichier .env.`;
+      db.addLog(errorMsg, 'ERROR');
+      return { success: false, error: errorMsg };
     }
 
     const prog = db.getProgrammeById(activeProgrammeId);
@@ -64,8 +66,9 @@ async function sendDailyProgram(channelId, activeProgrammeId, dayOfWeek, dateStr
     const exercises = db.getExercisesByProgrammeAndDay(activeProgrammeId, dayOfWeek);
 
     if (exercises.length === 0) {
-      db.addLog(`Aucun exercice prévu pour aujourd'hui (Jour ${dayOfWeek}). Aucun message Discord envoyé.`, 'INFO');
-      return null;
+      const infoMsg = `Aucun exercice prévu pour aujourd'hui (${getDayName(dayOfWeek)}). Jour de repos.`;
+      db.addLog(infoMsg, 'INFO');
+      return { success: false, error: infoMsg };
     }
 
     // Calcul de la semaine courante (depuis la création du programme ou du mois)
@@ -160,11 +163,12 @@ async function sendDailyProgram(channelId, activeProgrammeId, dayOfWeek, dateStr
 
     db.setParam(`discord_msgs_${dateStr}`, JSON.stringify({ channelId, messageIds: sentMessageIds }));
     db.addLog(`Message(s) du programme du jour envoyé(s) sur Discord (IDs: ${sentMessageIds.join(', ')})`, 'INFO');
-    return sentMessageIds;
+    return { success: true, messageIds: sentMessageIds };
   } catch (err) {
-    db.addLog(`Erreur d'envoi du message Discord : ${err.message}`, 'ERROR');
+    const errorMsg = `Erreur d'envoi Discord : ${err.message}`;
+    db.addLog(errorMsg, 'ERROR');
     console.error('[Discord sendDailyProgram Error]', err);
-    return null;
+    return { success: false, error: errorMsg };
   }
 }
 

@@ -274,18 +274,19 @@ router.post('/discord/send-today', async (req, res) => {
     const dateStr = getTodayString();
     const dayOfWeek = getDayOfWeekIndex();
 
-    if (!channelId) {
-      return res.status(400).json({ success: false, error: 'DISCORD_CHANNEL_ID non configuré.' });
+    if (!channelId || channelId.includes('votre_channel')) {
+      return res.status(400).json({ success: false, error: 'DISCORD_CHANNEL_ID non configuré dans le fichier .env.' });
     }
     if (!activeProgId) {
-      return res.status(400).json({ success: false, error: 'Aucun programme actif.' });
+      return res.status(400).json({ success: false, error: 'Aucun programme actif configuré.' });
     }
 
     const result = await sendDailyProgram(channelId, activeProgId, dayOfWeek, dateStr);
-    if (result) {
-      res.json({ success: true, message: 'Message du programme envoyé sur Discord.' });
+    if (result && result.success) {
+      res.json({ success: true, message: 'Message du programme envoyé avec succès sur Discord !' });
     } else {
-      res.status(500).json({ success: false, error: 'Échec d envoi du message (vérifier les logs Discord).' });
+      const errorMsg = (result && result.error) ? result.error : 'Échec d envoi du message Discord.';
+      res.status(400).json({ success: false, error: errorMsg });
     }
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
