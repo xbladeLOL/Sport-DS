@@ -9,7 +9,7 @@ if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });
 }
 
-const db = new Database(dbPath);
+let db = new Database(dbPath);
 db.pragma('foreign_keys = ON');
 
 // Initialisation du schéma de base de données
@@ -352,6 +352,25 @@ function recordExerciseHistory(dateStr, exerciseId, name, sets, reps, weight_kg,
   stmt.run(dateStr, exerciseId, name, sets, reps, weight_kg, status);
   updateDayLogProgress(dateStr);
   addLog(`Exercice "${name}" marqué [${status}] pour le ${dateStr}`, 'INFO');
+
+  // Auto-clôture de la séance si tous les exercices prévus pour ce jour sont réalisés/répondus
+  const activeProgId = getActiveProgramId();
+  if (activeProgId) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dateObj = new Date(y, m - 1, d);
+    const dayOfWeek = dateObj.getDay() === 0 ? 7 : dateObj.getDay();
+    const planned = getExercisesByProgrammeAndDay(activeProgId, dayOfWeek);
+    const history = getTodayHistory(dateStr);
+    const answeredCount = planned.filter(ex => history.some(h => h.exercice_id === ex.id)).length;
+
+    if (planned.length > 0 && answeredCount >= planned.length) {
+      const session = getTodaySession(dateStr);
+      if (session.session_state === 'ACTIVE') {
+        endWorkoutSession(dateStr);
+        addLog(`Tous les exercices du ${dateStr} ont été complétés. Séance terminée automatiquement.`, 'INFO');
+      }
+    }
+  }
 }
 
 function getTodayHistory(dateStr) {
@@ -813,27 +832,35 @@ function endWorkoutSession(dateStr) {
 }
 
 function resetDatabase() {
-  db.pragma('foreign_keys = OFF');
-  db.exec(`
-    DELETE FROM historique;
-    DELETE FROM day_logs;
-    DELETE FROM exercices;
-    DELETE FROM programmes;
-    DELETE FROM logs;
-    DELETE FROM parametres;
-  `);
   try {
-    db.exec(`DELETE FROM sqlite_sequence;`);
+    db.close();
   } catch (e) {
-    // sqlite_sequence table n'existe pas si aucune ligne n'a encore été insérée
+    console.error('Erreur lors de la fermeture de SQLite :', e.message);
   }
+
+  // Suppression physique du fichier .db principal et des fichiers WAL/SHM associés
+  if (fs.existsSync(dbPath)) {
+    try { fs.unlinkSync(dbPath); } catch (e) { console.error('Erreur suppression DB:', e.message); }
+  }
+  if (fs.existsSync(dbPath + '-wal')) {
+    try { fs.unlinkSync(dbPath + '-wal'); } catch (e) {}
+  }
+  if (fs.existsSync(dbPath + '-shm')) {
+    try { fs.unlinkSync(dbPath + '-shm'); } catch (e) {}
+  }
+
+  // Re-création complète de l'instance Database SQLite
+  db = new Database(dbPath);
   db.pragma('foreign_keys = ON');
+
+  // Réinitialisation du schéma et données par défaut
   initSchema();
-  addLog('Base de données SQLite réinitialisée aux paramètres d usine.', 'WARNING');
+  addLog('Fichier de base de données SQLite supprimé puis récréé avec succès.', 'WARNING');
 }
 
 module.exports = {
-  db,
+  get db() { return db; },
+  set db(val) { db = val; },
   getParam,
   setParam,
   getActiveProgramId,

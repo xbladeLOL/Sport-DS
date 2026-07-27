@@ -54,33 +54,19 @@ function buildSessionActionRow(session, dateStr) {
 
   const btnStart = new ButtonBuilder()
     .setCustomId(`SESSION_START_${dateStr}`)
-    .setLabel('Début')
+    .setLabel('Lancer la séance')
     .setEmoji('▶️')
     .setStyle(ButtonStyle.Success)
     .setDisabled(state === 'ACTIVE' || state === 'ENDED');
 
-  const btnPause = new ButtonBuilder()
-    .setCustomId(`SESSION_PAUSE_${dateStr}`)
-    .setLabel('Pause')
-    .setEmoji('⏸️')
-    .setStyle(ButtonStyle.Secondary)
-    .setDisabled(state !== 'ACTIVE');
-
-  const btnResume = new ButtonBuilder()
-    .setCustomId(`SESSION_RESUME_${dateStr}`)
-    .setLabel('Reprendre')
-    .setEmoji('▶️')
-    .setStyle(ButtonStyle.Primary)
-    .setDisabled(state !== 'PAUSED');
-
   const btnEnd = new ButtonBuilder()
     .setCustomId(`SESSION_END_${dateStr}`)
-    .setLabel('Fin')
+    .setLabel('Finir la séance')
     .setEmoji('⏹️')
     .setStyle(ButtonStyle.Danger)
     .setDisabled(state === 'IDLE' || state === 'ENDED');
 
-  return new ActionRowBuilder().addComponents(btnStart, btnPause, btnResume, btnEnd);
+  return new ActionRowBuilder().addComponents(btnStart, btnEnd);
 }
 
 function getSessionStatusFieldText(session) {
@@ -345,13 +331,13 @@ client.on('interactionCreate', async (interaction) => {
 
   const customId = interaction.customId;
 
-  // 1. Boutons de séance (SESSION_START, SESSION_PAUSE, SESSION_RESUME, SESSION_END)
+  // 1. Boutons de séance (SESSION_START, SESSION_END)
   if (customId.startsWith('SESSION_')) {
     const parts = customId.split('_'); // ['SESSION', 'START', '2026-07-28']
     if (parts.length < 3) return;
 
-    const action = parts[1]; // START, PAUSE, RESUME, END
-    const dateStr = parts[2];
+    const action = parts[1]; // START, END
+    const dateStr = parts.slice(2).join('_');
 
     try {
       await interaction.deferUpdate();
@@ -360,12 +346,6 @@ client.on('interactionCreate', async (interaction) => {
       if (action === 'START') {
         session = db.startWorkoutSession(dateStr);
         broadcast('SESSION_STARTED', { session });
-      } else if (action === 'PAUSE') {
-        session = db.pauseWorkoutSession(dateStr);
-        broadcast('SESSION_PAUSED', { session });
-      } else if (action === 'RESUME') {
-        session = db.resumeWorkoutSession(dateStr);
-        broadcast('SESSION_RESUMED', { session });
       } else if (action === 'END') {
         session = db.endWorkoutSession(dateStr);
         broadcast('SESSION_ENDED', { session });
@@ -389,7 +369,7 @@ client.on('interactionCreate', async (interaction) => {
 
   const action = parts[1]; // DONE, FAILED, SKIPPED
   const exerciseId = parseInt(parts[2], 10);
-  const dateStr = parts[3];
+  const dateStr = parts.slice(3).join('_');
 
   try {
     const existingHistory = db.getTodayHistory(dateStr);
@@ -402,8 +382,15 @@ client.on('interactionCreate', async (interaction) => {
       });
     }
 
-    // Acquittement immédiat sans message popup pour éviter les erreurs de timeout 3s
+    // Acquittement immédiat sans message popup
     await interaction.deferUpdate();
+
+    // Démarrage automatique de la séance si elle n'a pas encore été démarrée
+    let currentSession = db.getTodaySession(dateStr);
+    if (currentSession.session_state === 'IDLE') {
+      currentSession = db.startWorkoutSession(dateStr);
+      broadcast('SESSION_STARTED', { session: currentSession });
+    }
 
     const exRow = db.db.prepare('SELECT * FROM exercices WHERE id = ?').get(exerciseId);
     const exName = exRow ? exRow.name : `Exercice #${exerciseId}`;
@@ -421,6 +408,7 @@ client.on('interactionCreate', async (interaction) => {
     const planned = db.getExercisesByProgrammeAndDay(activeProgId, dayOfWeek);
     const updatedHistory = db.getTodayHistory(dateStr);
     const doneCount = planned.filter(ex => updatedHistory.some(h => h.exercice_id === ex.id && h.status === 'DONE')).length;
+    const answeredCount = planned.filter(ex => updatedHistory.some(h => h.exercice_id === ex.id)).length;
 
     // Événements WebSocket pour mise à jour de l'UI Web
     broadcast('EXERCISE_UPDATED', {
@@ -435,6 +423,17 @@ client.on('interactionCreate', async (interaction) => {
       doneCount,
       totalCount: planned.length
     });
+
+    // Auto-clôture si TOUS les exercices de la journée sont complétés/répondus
+    if (planned.length > 0 && answeredCount >= planned.length) {
+      const activeSession = db.getTodaySession(dateStr);
+      if (activeSession.session_state === 'ACTIVE') {
+        const endedSession = db.endWorkoutSession(dateStr);
+        broadcast('SESSION_ENDED', { session: endedSession });
+        broadcast('STATS_UPDATED', db.getStats(30));
+        db.addLog(`Tous les exercices du ${dateStr} ont été réalisés. Séance clôturée automatiquement !`, 'INFO');
+      }
+    }
 
     // Mettre à jour les messages Discord
     await updateDiscordDailyMessages(dateStr);
