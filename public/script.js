@@ -250,9 +250,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const shortDay = day.date.slice(8); // 'DD'
       tile.textContent = shortDay;
 
-      if (day.status === 'SUCCESS') {
+      if (day.status === 'SUCCESS' || day.done > 0) {
         tile.classList.add('tile-success');
-        tile.title = `${day.date} : Succès ! (${day.done}/${day.total} exercices)`;
+        tile.title = `${day.date} : Exercices réalisés (${day.done}/${day.total || day.done})`;
       } else if (day.status === 'REST') {
         tile.classList.add('tile-rest');
         tile.title = `${day.date} : Jour de repos validé (Streak continue)`;

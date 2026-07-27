@@ -489,8 +489,15 @@ function getStats(daysCount = 30) {
   const startDate = new Date();
   startDate.setDate(endDate.getDate() - (daysCount - 1));
 
-  const startDateStr = startDate.toISOString().split('T')[0];
-  const endDateStr = endDate.toISOString().split('T')[0];
+  const formatLocalDate = (d) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  const startDateStr = formatLocalDate(startDate);
+  const endDateStr = formatLocalDate(endDate);
 
   // Totaux globaux historique
   const totalStats = db.prepare(`
@@ -575,31 +582,40 @@ function getStats(daysCount = 30) {
 
   const curr = new Date(startDate);
   while (curr <= endDate) {
-    const dStr = curr.toISOString().split('T')[0];
+    const dStr = formatLocalDate(curr);
     const log = dayLogsMap[dStr];
 
-    let dayStatus = 'EMPTY'; // 'SUCCESS', 'FAILED', 'REST', 'EMPTY'
-    if (log) {
-      dayStatus = log.status;
-    }
-
-    heatMapDays.push({
-      date: dStr,
-      status: dayStatus,
-      done: log ? log.exercises_done : 0,
-      total: log ? log.exercises_total : 0
-    });
-
-    chartLabels.push(dStr.slice(5)); // 'MM-DD'
-    
-    // Obtenir le nombre de faites et échouées pour ce jour précis
+    // Obtenir le nombre d'exercices faits et échoués pour ce jour précis depuis l'historique
     const dayHist = db.prepare(`
       SELECT 
+        COUNT(*) as total_recorded,
         SUM(CASE WHEN status = 'DONE' THEN 1 ELSE 0 END) as d,
         SUM(CASE WHEN status IN ('FAILED', 'SKIPPED') THEN 1 ELSE 0 END) as f
       FROM historique WHERE date = ?
     `).get(dStr);
 
+    const doneCount = (dayHist && dayHist.d) ? dayHist.d : (log ? log.exercises_done : 0);
+    const totalCount = (log && log.exercises_total) ? log.exercises_total : (dayHist ? dayHist.total_recorded : 0);
+
+    let dayStatus = 'EMPTY'; // 'SUCCESS', 'FAILED', 'REST', 'EMPTY'
+    if (log) {
+      dayStatus = log.status;
+    } else if (dayHist && dayHist.total_recorded > 0) {
+      if (dayHist.d > 0) {
+        dayStatus = 'SUCCESS';
+      } else {
+        dayStatus = 'FAILED';
+      }
+    }
+
+    heatMapDays.push({
+      date: dStr,
+      status: dayStatus,
+      done: doneCount,
+      total: totalCount
+    });
+
+    chartLabels.push(dStr.slice(5)); // 'MM-DD'
     chartDoneData.push(dayHist ? (dayHist.d || 0) : 0);
     chartFailedData.push(dayHist ? (dayHist.f || 0) : 0);
 
