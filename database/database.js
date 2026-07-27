@@ -634,6 +634,20 @@ function autoBackupDatabase() {
   }
 }
 
+function resetDatabase() {
+  db.exec(`
+    DELETE FROM historique;
+    DELETE FROM day_logs;
+    DELETE FROM exercices;
+    DELETE FROM programmes;
+    DELETE FROM logs;
+    DELETE FROM parametres;
+    DELETE FROM sqlite_sequence;
+  `);
+  initSchema();
+  addLog('Base de données SQLite réinitialisée aux paramètres d usine.', 'WARNING');
+}
+
 module.exports = {
   db,
   getParam,
@@ -661,5 +675,6 @@ module.exports = {
   addLog,
   getRecentLogs,
   cleanOldData,
-  autoBackupDatabase
+  autoBackupDatabase,
+  resetDatabase
 };

@@ -886,6 +886,28 @@ document.addEventListener('DOMContentLoaded', () => {
         loadLogsConsole();
       }
     });
+
+    // Réinitialiser la base SQLite (Reset usine)
+    const btnResetDb = document.getElementById('btn-reset-db');
+    if (btnResetDb) {
+      btnResetDb.addEventListener('click', async () => {
+        if (confirm('⚠️ Êtes-vous sûr de vouloir réinitialiser entièrement la base de données ?\nToutes les données, programmes, exercices et historiques seront effacés !')) {
+          showToast('Réinitialisation de la base SQLite...', 'info');
+          try {
+            const res = await fetch('/api/database/reset', { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+              showToast(data.message, 'success');
+              loadInitialData();
+            } else {
+              showToast(data.error || 'Erreur lors de la réinitialisation.', 'error');
+            }
+          } catch (err) {
+            showToast('Échec de la réinitialisation de la base.', 'error');
+          }
+        }
+      });
+    }
   }
 
   // MODALE EXERCICE HELPERS

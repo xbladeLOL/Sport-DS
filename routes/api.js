@@ -266,6 +266,16 @@ router.get('/backups/list', (req, res) => {
   }
 });
 
+router.post('/database/reset', (req, res) => {
+  try {
+    db.resetDatabase();
+    broadcast('DATABASE_RESTORED', {});
+    res.json({ success: true, message: 'La base de données SQLite a été réinitialisée avec succès.' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // --- ACTION MANUELLE DISCORD ---
 router.post('/discord/send-today', async (req, res) => {
   try {
