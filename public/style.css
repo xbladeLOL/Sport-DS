@@ -401,35 +401,39 @@ body {
 }
 
 .heatmap-grid-container {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(36px, 1fr));
-  gap: 12px;
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  align-items: center;
+  gap: clamp(4px, 0.8vw, 10px);
   margin: 20px 0;
-  padding: 20px;
+  padding: 20px 16px;
   background: rgba(0, 0, 0, 0.25);
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
   min-height: 85px;
-  align-items: center;
-  justify-content: center;
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-highlight) transparent;
 }
 
 .heatmap-tile {
-  width: 100%;
+  flex: 1 1 0;
+  max-width: 46px;
+  min-width: 26px;
   aspect-ratio: 1 / 1;
-  max-width: 56px;
-  max-height: 56px;
-  min-height: 36px;
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.85rem;
+  font-size: clamp(0.7rem, 1.2vw, 0.85rem);
   font-weight: 700;
   cursor: pointer;
   position: relative;
-  margin: 0 auto;
   transition: var(--transition-fast);
+  user-select: none;
+  flex-shrink: 0;
 }
 
 .heatmap-tile:hover {
