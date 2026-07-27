@@ -63,7 +63,13 @@ function initSchema() {
       status TEXT NOT NULL CHECK(status IN ('SUCCESS', 'FAILED', 'REST')),
       exercises_total INTEGER DEFAULT 0,
       exercises_done INTEGER DEFAULT 0,
-      discord_message_ids TEXT
+      discord_message_ids TEXT,
+      start_time TEXT,
+      pause_start_time TEXT,
+      accumulated_pause_sec INTEGER DEFAULT 0,
+      end_time TEXT,
+      session_state TEXT DEFAULT 'IDLE',
+      duration_sec INTEGER DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS logs (
@@ -80,6 +86,12 @@ function initSchema() {
   } catch (e) {
     // La colonne existe déjà
   }
+  try { db.exec(`ALTER TABLE day_logs ADD COLUMN start_time TEXT`); } catch (e) {}
+  try { db.exec(`ALTER TABLE day_logs ADD COLUMN pause_start_time TEXT`); } catch (e) {}
+  try { db.exec(`ALTER TABLE day_logs ADD COLUMN accumulated_pause_sec INTEGER DEFAULT 0`); } catch (e) {}
+  try { db.exec(`ALTER TABLE day_logs ADD COLUMN end_time TEXT`); } catch (e) {}
+  try { db.exec(`ALTER TABLE day_logs ADD COLUMN session_state TEXT DEFAULT 'IDLE'`); } catch (e) {}
+  try { db.exec(`ALTER TABLE day_logs ADD COLUMN duration_sec INTEGER DEFAULT 0`); } catch (e) {}
 
   // Initialisation des paramètres par défaut
   const setParamStmt = db.prepare('INSERT OR IGNORE INTO parametres (key, value) VALUES (?, ?)');
@@ -338,6 +350,7 @@ function recordExerciseHistory(dateStr, exerciseId, name, sets, reps, weight_kg,
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
   stmt.run(dateStr, exerciseId, name, sets, reps, weight_kg, status);
+  updateDayLogProgress(dateStr);
   addLog(`Exercice "${name}" marqué [${status}] pour le ${dateStr}`, 'INFO');
 }
 
@@ -634,7 +647,173 @@ function autoBackupDatabase() {
   }
 }
 
+function updateDayLogProgress(dateStr) {
+  const activeProgId = getActiveProgramId();
+  if (!activeProgId) return;
+
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dateObj = new Date(y, m - 1, d);
+  const dayOfWeek = dateObj.getDay() === 0 ? 7 : dateObj.getDay();
+
+  const planned = getExercisesByProgrammeAndDay(activeProgId, dayOfWeek);
+  const totalCount = planned.length;
+  const history = getTodayHistory(dateStr);
+  const doneCount = history.filter(h => h.status === 'DONE').length;
+
+  const existing = db.prepare('SELECT * FROM day_logs WHERE date = ?').get(dateStr);
+  let status = existing ? existing.status : (totalCount === 0 ? 'REST' : 'SUCCESS');
+
+  if (existing) {
+    db.prepare('UPDATE day_logs SET exercises_total = ?, exercises_done = ? WHERE date = ?').run(totalCount, doneCount, dateStr);
+  } else {
+    db.prepare(`
+      INSERT INTO day_logs (date, status, exercises_total, exercises_done, session_state)
+      VALUES (?, ?, ?, ?, 'IDLE')
+    `).run(dateStr, status, totalCount, doneCount);
+  }
+}
+
+// --- GESTION DE SEANCE DE SPORT ---
+function getTodaySession(dateStr) {
+  const row = db.prepare('SELECT * FROM day_logs WHERE date = ?').get(dateStr);
+  if (!row || !row.session_state) {
+    return {
+      date: dateStr,
+      session_state: 'IDLE',
+      start_time: null,
+      pause_start_time: null,
+      accumulated_pause_sec: 0,
+      end_time: null,
+      duration_sec: 0
+    };
+  }
+
+  let durationSec = row.duration_sec || 0;
+  if (row.session_state === 'ACTIVE' && row.start_time) {
+    const nowMs = Date.now();
+    const startMs = new Date(row.start_time).getTime();
+    const elapsedSec = Math.max(0, Math.floor((nowMs - startMs) / 1000));
+    durationSec = Math.max(0, elapsedSec - (row.accumulated_pause_sec || 0));
+  } else if (row.session_state === 'PAUSED' && row.start_time && row.pause_start_time) {
+    const pauseStartMs = new Date(row.pause_start_time).getTime();
+    const startMs = new Date(row.start_time).getTime();
+    const elapsedSec = Math.max(0, Math.floor((pauseStartMs - startMs) / 1000));
+    durationSec = Math.max(0, elapsedSec - (row.accumulated_pause_sec || 0));
+  }
+
+  return {
+    date: row.date,
+    session_state: row.session_state || 'IDLE',
+    start_time: row.start_time || null,
+    pause_start_time: row.pause_start_time || null,
+    accumulated_pause_sec: row.accumulated_pause_sec || 0,
+    end_time: row.end_time || null,
+    duration_sec: durationSec
+  };
+}
+
+function startWorkoutSession(dateStr) {
+  const session = getTodaySession(dateStr);
+  if (session.session_state === 'ACTIVE' || session.session_state === 'ENDED') {
+    return session;
+  }
+  if (session.session_state === 'PAUSED') {
+    return resumeWorkoutSession(dateStr);
+  }
+
+  const nowStr = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO day_logs (date, status, exercises_total, exercises_done, start_time, pause_start_time, accumulated_pause_sec, end_time, session_state, duration_sec)
+    VALUES (?, 'SUCCESS', 0, 0, ?, NULL, 0, NULL, 'ACTIVE', 0)
+    ON CONFLICT(date) DO UPDATE SET
+      start_time = excluded.start_time,
+      pause_start_time = NULL,
+      accumulated_pause_sec = 0,
+      end_time = NULL,
+      session_state = 'ACTIVE'
+  `).run(dateStr, nowStr);
+
+  updateDayLogProgress(dateStr);
+  addLog(`Séance de sport démarrée à ${nowStr} pour le ${dateStr}`, 'INFO');
+  return getTodaySession(dateStr);
+}
+
+function pauseWorkoutSession(dateStr) {
+  const session = getTodaySession(dateStr);
+  if (session.session_state !== 'ACTIVE') {
+    return session;
+  }
+
+  const nowStr = new Date().toISOString();
+  db.prepare(`
+    UPDATE day_logs SET
+      session_state = 'PAUSED',
+      pause_start_time = ?
+    WHERE date = ?
+  `).run(nowStr, dateStr);
+
+  addLog(`Séance de sport mise en pause pour le ${dateStr}`, 'INFO');
+  return getTodaySession(dateStr);
+}
+
+function resumeWorkoutSession(dateStr) {
+  const session = getTodaySession(dateStr);
+  if (session.session_state !== 'PAUSED') {
+    return session;
+  }
+
+  const nowMs = Date.now();
+  const pauseStartMs = session.pause_start_time ? new Date(session.pause_start_time).getTime() : nowMs;
+  const pauseDeltaSec = Math.max(0, Math.floor((nowMs - pauseStartMs) / 1000));
+  const newAccumulated = (session.accumulated_pause_sec || 0) + pauseDeltaSec;
+
+  db.prepare(`
+    UPDATE day_logs SET
+      session_state = 'ACTIVE',
+      pause_start_time = NULL,
+      accumulated_pause_sec = ?
+    WHERE date = ?
+  `).run(newAccumulated, dateStr);
+
+  addLog(`Séance de sport reprise pour le ${dateStr} (Pause ajoutée: ${pauseDeltaSec}s)`, 'INFO');
+  return getTodaySession(dateStr);
+}
+
+function endWorkoutSession(dateStr) {
+  const session = getTodaySession(dateStr);
+  if (session.session_state === 'ENDED' || session.session_state === 'IDLE') {
+    return session;
+  }
+
+  const nowMs = Date.now();
+  const nowStr = new Date(nowMs).toISOString();
+
+  let accumulatedPauseSec = session.accumulated_pause_sec || 0;
+  if (session.session_state === 'PAUSED' && session.pause_start_time) {
+    const pauseStartMs = new Date(session.pause_start_time).getTime();
+    accumulatedPauseSec += Math.max(0, Math.floor((nowMs - pauseStartMs) / 1000));
+  }
+
+  const startMs = session.start_time ? new Date(session.start_time).getTime() : nowMs;
+  const totalElapsedSec = Math.max(0, Math.floor((nowMs - startMs) / 1000));
+  const finalDurationSec = Math.max(0, totalElapsedSec - accumulatedPauseSec);
+
+  db.prepare(`
+    UPDATE day_logs SET
+      session_state = 'ENDED',
+      end_time = ?,
+      accumulated_pause_sec = ?,
+      pause_start_time = NULL,
+      duration_sec = ?
+    WHERE date = ?
+  `).run(nowStr, accumulatedPauseSec, finalDurationSec, dateStr);
+
+  addLog(`Séance de sport terminée pour le ${dateStr}. Durée nette: ${Math.round(finalDurationSec / 60)} min`, 'INFO');
+  return getTodaySession(dateStr);
+}
+
 function resetDatabase() {
+  db.pragma('foreign_keys = OFF');
   db.exec(`
     DELETE FROM historique;
     DELETE FROM day_logs;
@@ -642,8 +821,13 @@ function resetDatabase() {
     DELETE FROM programmes;
     DELETE FROM logs;
     DELETE FROM parametres;
-    DELETE FROM sqlite_sequence;
   `);
+  try {
+    db.exec(`DELETE FROM sqlite_sequence;`);
+  } catch (e) {
+    // sqlite_sequence table n'existe pas si aucune ligne n'a encore été insérée
+  }
+  db.pragma('foreign_keys = ON');
   initSchema();
   addLog('Base de données SQLite réinitialisée aux paramètres d usine.', 'WARNING');
 }
@@ -676,5 +860,11 @@ module.exports = {
   getRecentLogs,
   cleanOldData,
   autoBackupDatabase,
-  resetDatabase
+  resetDatabase,
+  updateDayLogProgress,
+  getTodaySession,
+  startWorkoutSession,
+  pauseWorkoutSession,
+  resumeWorkoutSession,
+  endWorkoutSession
 };

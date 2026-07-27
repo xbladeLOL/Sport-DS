@@ -269,8 +269,65 @@ router.get('/backups/list', (req, res) => {
 router.post('/database/reset', (req, res) => {
   try {
     db.resetDatabase();
+    broadcast('DATABASE_RESET', {});
     broadcast('DATABASE_RESTORED', {});
     res.json({ success: true, message: 'La base de données SQLite a été réinitialisée avec succès.' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// --- SEANCE DE SPORT ---
+router.get('/session/today', (req, res) => {
+  try {
+    const dateStr = getTodayString();
+    const session = db.getTodaySession(dateStr);
+    res.json({ success: true, session });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.post('/session/start', (req, res) => {
+  try {
+    const dateStr = getTodayString();
+    const session = db.startWorkoutSession(dateStr);
+    broadcast('SESSION_STARTED', { session });
+    res.json({ success: true, session });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.post('/session/pause', (req, res) => {
+  try {
+    const dateStr = getTodayString();
+    const session = db.pauseWorkoutSession(dateStr);
+    broadcast('SESSION_PAUSED', { session });
+    res.json({ success: true, session });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.post('/session/resume', (req, res) => {
+  try {
+    const dateStr = getTodayString();
+    const session = db.resumeWorkoutSession(dateStr);
+    broadcast('SESSION_RESUMED', { session });
+    res.json({ success: true, session });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.post('/session/end', (req, res) => {
+  try {
+    const dateStr = getTodayString();
+    const session = db.endWorkoutSession(dateStr);
+    broadcast('SESSION_ENDED', { session });
+    broadcast('STATS_UPDATED', db.getStats(30));
+    res.json({ success: true, session });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
