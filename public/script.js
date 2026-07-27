@@ -384,33 +384,37 @@ document.addEventListener('DOMContentLoaded', () => {
       card.className = 'exercise-item-card';
       card.draggable = true;
       card.setAttribute('data-id', ex.id);
-      card.setAttribute('data-order', index + 1);
-
+      ca      const isStatic = !!ex.is_static;
       let progPill = '';
-      if (ex.increment_reps_per_week > 0 || ex.increment_weight_per_week > 0) {
+      if (ex.increment_reps_per_week > 0 || ex.increment_weight_per_week > 0 || ex.increment_hold_time_per_week > 0) {
         const interval = ex.increment_interval_weeks || 1;
         const intervalLabels = { 1: 'sem', 2: '2 sem', 3: '3 sem', 4: 'mois' };
         const unitLabel = intervalLabels[interval] || `${interval} sem`;
 
         const parts = [];
-        if (ex.increment_reps_per_week > 0) parts.push(`+${ex.increment_reps_per_week} rep / ${unitLabel}`);
+        if (isStatic && ex.increment_hold_time_per_week > 0) parts.push(`+${ex.increment_hold_time_per_week}s / ${unitLabel}`);
+        if (!isStatic && ex.increment_reps_per_week > 0) parts.push(`+${ex.increment_reps_per_week} rep / ${unitLabel}`);
         if (ex.increment_weight_per_week > 0) parts.push(`+${ex.increment_weight_per_week} kg / ${unitLabel}`);
         progPill = `<span class="pill progression">📈 ${parts.join(' | ')}</span>`;
       }
+
+      const countPill = isStatic ? `<span class="pill">⏱️ ${ex.hold_time_sec || 0}s maintien</span>` : `<span class="pill">${ex.reps} reps</span>`;
 
       card.innerHTML = `
         <div class="ex-left">
           <span class="drag-handle" title="Glisser pour réordonner">☰</span>
           <div class="ex-info">
-            <h4>${index + 1}. ${ex.name}</h4>
+            <h4>${index + 1}. ${ex.name} ${isStatic ? '<span class="pill" style="font-size:0.75rem; background:rgba(6,182,212,0.15); color:#06b6d4;">Statique</span>' : ''}</h4>
             <div class="ex-details-pills">
               <span class="pill">${ex.sets} séries</span>
-              <span class="pill">${ex.reps} reps</span>
+              ${countPill}
               ${ex.weight_kg > 0 ? `<span class="pill">${ex.weight_kg} kg</span>` : ''}
               ${ex.duration_sec > 0 ? `<span class="pill">${ex.duration_sec}s repos</span>` : ''}
               ${progPill}
             </div>
             ${ex.comments ? `<p class="ex-comments-text">💬 ${ex.comments}</p>` : ''}
+          </div>
+        </div>`.comments}</p>` : ''}
           </div>
         </div>
 
@@ -856,6 +860,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Modale Ajouter Exercice
+    const exTypeSelect = document.getElementById('ex-type');
+    if (exTypeSelect) {
+      exTypeSelect.addEventListener('change', toggleExTypeFields);
+    }
     document.getElementById('btn-quick-add-ex').addEventListener('click', () => openExerciseModal());
     document.getElementById('btn-add-ex-day').addEventListener('click', () => openExerciseModal());
     document.getElementById('btn-close-ex-modal').addEventListener('click', closeExerciseModal);
@@ -865,6 +873,7 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
       const exId = document.getElementById('ex-id').value;
       const selectedProgId = parseInt(document.getElementById('prog-select').value, 10);
+      const isStatic = document.getElementById('ex-type').value === '1';
 
       const payload = {
         programme_id: selectedProgId,
@@ -872,13 +881,17 @@ document.addEventListener('DOMContentLoaded', () => {
         name: document.getElementById('ex-name').value,
         description: document.getElementById('ex-desc').value,
         sets: parseInt(document.getElementById('ex-sets').value, 10),
-        reps: parseInt(document.getElementById('ex-reps').value, 10),
+        reps: isStatic ? 1 : parseInt(document.getElementById('ex-reps').value || '1', 10),
         weight_kg: parseFloat(document.getElementById('ex-weight').value || '0'),
-        increment_reps_per_week: parseInt(document.getElementById('ex-inc-reps').value || '0', 10),
+        increment_reps_per_week: isStatic ? 0 : parseInt(document.getElementById('ex-inc-reps').value || '0', 10),
         increment_weight_per_week: parseFloat(document.getElementById('ex-inc-weight').value || '0'),
         increment_interval_weeks: parseInt(document.getElementById('ex-inc-interval').value || '1', 10),
         duration_sec: parseInt(document.getElementById('ex-duration').value || '0', 10),
-        comments: document.getElementById('ex-comments').value
+        comments: document.getElementById('ex-comments').value,
+        is_static: isStatic ? 1 : 0,
+        hold_time_sec: isStatic ? parseInt(document.getElementById('ex-hold').value || '0', 10) : 0,
+        target_hold_time_sec: isStatic ? parseInt(document.getElementById('ex-hold').value || '0', 10) : 0,
+        increment_hold_time_per_week: isStatic ? parseInt(document.getElementById('ex-inc-hold').value || '0', 10) : 0
       };
 
       try {
@@ -1028,6 +1041,14 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // MODALE EXERCICE HELPERS
+  function toggleExTypeFields() {
+    const isStatic = document.getElementById('ex-type').value === '1';
+    document.getElementById('group-ex-reps').style.display = isStatic ? 'none' : 'block';
+    document.getElementById('group-ex-hold').style.display = isStatic ? 'block' : 'none';
+    document.getElementById('group-ex-inc-reps').style.display = isStatic ? 'none' : 'block';
+    document.getElementById('group-ex-inc-hold').style.display = isStatic ? 'block' : 'none';
+  }
+
   function openExerciseModal(ex = null) {
     const modal = document.getElementById('modal-exercise');
     modal.classList.add('show');
@@ -1037,10 +1058,13 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('ex-id').value = ex.id;
       document.getElementById('ex-name').value = ex.name;
       document.getElementById('ex-desc').value = ex.description || '';
+      document.getElementById('ex-type').value = ex.is_static ? '1' : '0';
       document.getElementById('ex-sets').value = ex.sets;
-      document.getElementById('ex-reps').value = ex.reps;
+      document.getElementById('ex-reps').value = ex.reps || 12;
+      document.getElementById('ex-hold').value = ex.hold_time_sec || 30;
       document.getElementById('ex-weight').value = ex.weight_kg || 0;
       document.getElementById('ex-inc-reps').value = ex.increment_reps_per_week || 0;
+      document.getElementById('ex-inc-hold').value = ex.increment_hold_time_per_week || 0;
       document.getElementById('ex-inc-weight').value = ex.increment_weight_per_week || 0;
       document.getElementById('ex-inc-interval').value = ex.increment_interval_weeks || 1;
       document.getElementById('ex-duration').value = ex.duration_sec || 90;
@@ -1049,8 +1073,10 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('modal-ex-title').textContent = 'Ajouter un Exercice';
       document.getElementById('form-exercise').reset();
       document.getElementById('ex-id').value = '';
+      document.getElementById('ex-type').value = '0';
       document.getElementById('ex-inc-interval').value = 1;
     }
+    toggleExTypeFields();
   }
 
   function closeExerciseModal() {

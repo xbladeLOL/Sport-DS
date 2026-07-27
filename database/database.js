@@ -43,6 +43,10 @@ function initSchema() {
       weight_kg REAL DEFAULT 0,
       comments TEXT,
       order_index INTEGER DEFAULT 0,
+      is_static INTEGER DEFAULT 0,
+      hold_time_sec INTEGER DEFAULT 0,
+      target_hold_time_sec INTEGER DEFAULT 0,
+      increment_hold_time_per_week INTEGER DEFAULT 0,
       FOREIGN KEY (programme_id) REFERENCES programmes(id) ON DELETE CASCADE
     );
 
@@ -215,8 +219,9 @@ function addExercise(data) {
     INSERT INTO exercices (
       programme_id, day_of_week, name, description, sets, reps, 
       target_reps, target_weight, increment_reps_per_week, increment_weight_per_week, increment_interval_weeks,
-      duration_sec, weight_kg, comments, order_index
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      duration_sec, weight_kg, comments, order_index,
+      is_static, hold_time_sec, target_hold_time_sec, increment_hold_time_per_week
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const info = stmt.run(
@@ -234,7 +239,11 @@ function addExercise(data) {
     data.duration_sec || 0,
     data.weight_kg || 0,
     data.comments || '',
-    maxOrder + 1
+    maxOrder + 1,
+    data.is_static ? 1 : 0,
+    data.hold_time_sec || 0,
+    data.target_hold_time_sec || data.hold_time_sec || 0,
+    data.increment_hold_time_per_week || 0
   );
 
   addLog(`Exercice ajouté : ${data.name} (Jour ${data.day_of_week})`, 'INFO');
@@ -247,7 +256,8 @@ function updateExercise(id, data) {
       name = ?, description = ?, sets = ?, reps = ?,
       target_reps = ?, target_weight = ?, 
       increment_reps_per_week = ?, increment_weight_per_week = ?, increment_interval_weeks = ?,
-      duration_sec = ?, weight_kg = ?, comments = ?
+      duration_sec = ?, weight_kg = ?, comments = ?,
+      is_static = ?, hold_time_sec = ?, target_hold_time_sec = ?, increment_hold_time_per_week = ?
     WHERE id = ?
   `);
 
@@ -264,6 +274,10 @@ function updateExercise(id, data) {
     data.duration_sec || 0,
     data.weight_kg || 0,
     data.comments || '',
+    data.is_static ? 1 : 0,
+    data.hold_time_sec || 0,
+    data.target_hold_time_sec || data.hold_time_sec || 0,
+    data.increment_hold_time_per_week || 0,
     id
   );
 
@@ -305,8 +319,9 @@ function copyDay(programmeId, sourceDayOfWeek, targetDayOfWeek) {
       INSERT INTO exercices (
         programme_id, day_of_week, name, description, sets, reps, 
         target_reps, target_weight, increment_reps_per_week, increment_weight_per_week, increment_interval_weeks,
-        duration_sec, weight_kg, comments, order_index
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        duration_sec, weight_kg, comments, order_index,
+        is_static, hold_time_sec, target_hold_time_sec, increment_hold_time_per_week
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       programmeId,
       targetDayOfWeek,
@@ -322,7 +337,11 @@ function copyDay(programmeId, sourceDayOfWeek, targetDayOfWeek) {
       ex.duration_sec,
       ex.weight_kg,
       ex.comments,
-      idx + 1
+      idx + 1,
+      ex.is_static || 0,
+      ex.hold_time_sec || 0,
+      ex.target_hold_time_sec || 0,
+      ex.increment_hold_time_per_week || 0
     );
   });
 
@@ -337,9 +356,12 @@ function getCalculatedTarget(exercise, weekNumber = 1) {
 
   const targetReps = (exercise.target_reps || exercise.reps || 1) + (incrementsApplied * (exercise.increment_reps_per_week || 0));
   const targetWeight = (exercise.target_weight || exercise.weight_kg || 0) + (incrementsApplied * (exercise.increment_weight_per_week || 0));
+  const targetHoldTime = (exercise.target_hold_time_sec || exercise.hold_time_sec || 0) + (incrementsApplied * (exercise.increment_hold_time_per_week || 0));
+
   return {
     targetReps,
-    targetWeight: Math.round(targetWeight * 10) / 10
+    targetWeight: Math.round(targetWeight * 10) / 10,
+    targetHoldTime
   };
 }
 

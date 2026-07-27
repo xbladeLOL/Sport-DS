@@ -141,9 +141,17 @@ async function updateDiscordDailyMessages(dateStr) {
         else if (status === 'SKIPPED') statusPrefix = '⏭ ';
 
         descriptionText += `**${globalIndex}. ${statusPrefix}${ex.name}**\n`;
-        descriptionText += `${ex.sets} séries • ${ex.reps} répétitions`;
-        if (target.targetReps !== ex.reps || target.targetWeight > 0) {
-          descriptionText += ` *(Objectif : ${target.targetReps} reps${target.targetWeight > 0 ? ` @ ${target.targetWeight}kg` : ''})*`;
+        if (ex.is_static) {
+          const holdSec = ex.hold_time_sec || 0;
+          descriptionText += `${ex.sets} séries • Maintien : **${holdSec}s**`;
+          if (target.targetHoldTime > holdSec || target.targetWeight > 0) {
+            descriptionText += ` *(Objectif : ${target.targetHoldTime}s${target.targetWeight > 0 ? ` @ ${target.targetWeight}kg` : ''})*`;
+          }
+        } else {
+          descriptionText += `${ex.sets} séries • ${ex.reps} répétitions`;
+          if (target.targetReps !== ex.reps || target.targetWeight > 0) {
+            descriptionText += ` *(Objectif : ${target.targetReps} reps${target.targetWeight > 0 ? ` @ ${target.targetWeight}kg` : ''})*`;
+          }
         }
         if (ex.comments) {
           descriptionText += `\n*${ex.comments}*`;
@@ -263,9 +271,17 @@ async function sendDailyProgram(channelId, activeProgrammeId, dayOfWeek, dateStr
         else if (currentStatus === 'SKIPPED') statusPrefix = '⏭ ';
 
         descriptionText += `**${globalIndex}. ${statusPrefix}${ex.name}**\n`;
-        descriptionText += `${ex.sets} séries • ${ex.reps} répétitions`;
-        if (target.targetReps !== ex.reps || target.targetWeight > 0) {
-          descriptionText += ` *(Objectif : ${target.targetReps} reps${target.targetWeight > 0 ? ` @ ${target.targetWeight}kg` : ''})*`;
+        if (ex.is_static) {
+          const holdSec = ex.hold_time_sec || 0;
+          descriptionText += `${ex.sets} séries • Maintien : **${holdSec}s**`;
+          if (target.targetHoldTime > holdSec || target.targetWeight > 0) {
+            descriptionText += ` *(Objectif : ${target.targetHoldTime}s${target.targetWeight > 0 ? ` @ ${target.targetWeight}kg` : ''})*`;
+          }
+        } else {
+          descriptionText += `${ex.sets} séries • ${ex.reps} répétitions`;
+          if (target.targetReps !== ex.reps || target.targetWeight > 0) {
+            descriptionText += ` *(Objectif : ${target.targetReps} reps${target.targetWeight > 0 ? ` @ ${target.targetWeight}kg` : ''})*`;
+          }
         }
         if (ex.comments) {
           descriptionText += `\n*${ex.comments}*`;
