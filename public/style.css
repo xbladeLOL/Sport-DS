@@ -1015,21 +1015,241 @@ body {
   to { transform: translateX(0); opacity: 1; }
 }
 
-/* RESPONSIVE DESIGN */
-@media (max-width: 900px) {
-  .stats-charts-row, .tables-breakdown-row, .settings-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .main-header {
-    flex-direction: column;
-    gap: 16px;
-    align-items: flex-start;
+/* RESPONSIVE DESIGN (MOBILE ONLY) */
+@media (max-width: 768px) {
+  .app-container {
+    padding: 12px 12px 40px 12px;
   }
 
-  .quick-actions-bar {
+  /* Header & Badges */
+  .main-header {
     flex-direction: column;
     gap: 14px;
-    align-items: flex-start;
+    align-items: stretch;
+    padding: 16px;
+  }
+
+  .brand {
+    justify-content: center;
+  }
+
+  .header-badges {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+  }
+
+  .streak-badge, .ws-status-indicator {
+    flex: 1 1 auto;
+    justify-content: center;
+    padding: 8px 12px;
+  }
+
+  /* Nav Tabs */
+  .main-nav {
+    gap: 6px;
+    padding: 6px;
+  }
+
+  .nav-btn {
+    padding: 10px 12px;
+    font-size: 0.85rem;
+  }
+
+  /* Card Headers & Flex Between */
+  .card-header.flex-between {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .card-header h2 {
+    font-size: 1.15rem;
+    line-height: 1.3;
+  }
+
+  /* Period Selectors (Heatmap & Stats) */
+  .period-selector {
+    width: 100%;
+    justify-content: space-between;
+    gap: 4px;
+  }
+
+  .period-btn {
+    flex: 1;
+    text-align: center;
+    padding: 8px 4px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+  }
+
+  /* Quick Actions Bar */
+  .quick-actions-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    padding: 14px;
+  }
+
+  .active-prog-info {
+    justify-content: space-between;
+  }
+
+  .actions {
+    width: 100%;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* KPI Grid */
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .kpi-card {
+    padding: 14px;
+    gap: 12px;
+  }
+
+  .kpi-icon {
+    width: 42px;
+    height: 42px;
+    font-size: 1.3rem;
+  }
+
+  .kpi-value {
+    font-size: 1.3rem;
+  }
+
+  /* Heatmap Section */
+  .glass-card {
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .heatmap-grid-container {
+    padding: 14px 10px;
+    gap: 4px;
+  }
+
+  .heatmap-legend {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px 14px;
+    font-size: 0.75rem;
+  }
+
+  /* Programme Planner */
+  .prog-select-wrapper {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    width: 100%;
+  }
+
+  .prog-select-wrapper label {
+    white-space: normal;
+  }
+
+  .select-lg {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .prog-actions {
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+    width: 100%;
+  }
+
+  .prog-actions .btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .day-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+  }
+
+  .day-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .days-tab-nav {
+    gap: 4px;
+    padding-bottom: 4px;
+  }
+
+  .day-tab-btn {
+    padding: 10px 6px;
+    font-size: 0.78rem;
+    min-width: 70px;
+  }
+
+  .exercise-item-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .ex-actions {
+    width: 100%;
+    justify-content: flex-end;
+    border-top: 1px solid var(--border-color);
+    padding-top: 10px;
+  }
+
+  /* Stats & Analytics Tab */
+  .stats-charts-row, .tables-breakdown-row, .settings-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .chart-box, .breakdown-card {
+    padding: 14px;
+  }
+
+  .table-responsive {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .data-table th, .data-table td {
+    padding: 8px 10px;
+    font-size: 0.8rem;
+  }
+
+  /* Modals */
+  .modal-card {
+    max-width: 92%;
+    padding: 18px;
+    margin: 16px;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  .form-row-2, .form-row-3 {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .kpi-grid {
+    grid-template-columns: 1fr;
   }
 }
