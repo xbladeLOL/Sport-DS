@@ -384,7 +384,7 @@ document.addEventListener('DOMContentLoaded', () => {
       card.className = 'exercise-item-card';
       card.draggable = true;
       card.setAttribute('data-id', ex.id);
-      ca      const isStatic = !!ex.is_static;
+      const isStatic = !!ex.is_static;
       let progPill = '';
       if (ex.increment_reps_per_week > 0 || ex.increment_weight_per_week > 0 || ex.increment_hold_time_per_week > 0) {
         const interval = ex.increment_interval_weeks || 1;
@@ -413,8 +413,6 @@ document.addEventListener('DOMContentLoaded', () => {
               ${progPill}
             </div>
             ${ex.comments ? `<p class="ex-comments-text">💬 ${ex.comments}</p>` : ''}
-          </div>
-        </div>`.comments}</p>` : ''}
           </div>
         </div>
 
