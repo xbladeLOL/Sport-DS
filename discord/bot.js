@@ -16,6 +16,9 @@ client.once('ready', () => {
   isReady = true;
   db.addLog(`Bot Discord connecté en tant que ${client.user.tag}`, 'INFO');
   console.log(`[Discord Bot] Connecté en tant que ${client.user.tag}`);
+  
+  // Rattrapage automatique au démarrage si le programme du jour n'a pas encore été envoyé
+  checkAndSendMissedDailyProgram();
 });
 
 // Reconnexion et gestion des erreurs Discord sans crash
@@ -328,6 +331,53 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
+// --- VERIFICATION ET RATTRAPAGE AUTOMATIQUE AU DEMARRAGE ---
+async function checkAndSendMissedDailyProgram() {
+  try {
+    const { getTodayString, getDayOfWeekIndex } = require('./scheduler');
+    const dateStr = getTodayString();
+    const dayOfWeek = getDayOfWeekIndex();
+    const activeProgId = db.getActiveProgramId();
+    const channelId = process.env.DISCORD_CHANNEL_ID;
+
+    if (!activeProgId) {
+      db.addLog('[Démarrage] Aucun programme actif configuré.', 'WARNING');
+      return;
+    }
+
+    // Vérifier si le message a déjà été envoyé aujourd'hui
+    const existingMsgData = db.getParam(`discord_msgs_${dateStr}`);
+    if (existingMsgData) {
+      console.log(`[Démarrage] Le programme du jour (${dateStr}) a déjà été envoyé sur Discord.`);
+      db.addLog(`[Démarrage] Le programme du jour (${dateStr}) a déjà été envoyé sur Discord.`, 'INFO');
+      return;
+    }
+
+    const exercises = db.getExercisesByProgrammeAndDay(activeProgId, dayOfWeek);
+
+    if (exercises.length === 0) {
+      const dayLog = db.db.prepare('SELECT * FROM day_logs WHERE date = ?').get(dateStr);
+      if (!dayLog) {
+        db.closeDayAndCalculateStreak(dateStr, activeProgId, dayOfWeek);
+        broadcast('STREAK_UPDATED', db.calculateStreakInfo());
+        db.addLog(`[Démarrage] Aucun exercice aujourd'hui (${dateStr}). Journée de repos validée.`, 'INFO');
+      }
+    } else if (channelId && !channelId.includes('votre_channel')) {
+      console.log(`[Démarrage] Programme du jour (${dateStr}) non envoyé. Rattrapage en cours...`);
+      db.addLog(`[Démarrage] Programme du jour (${dateStr}) non envoyé. Rattrapage d'envoi en cours...`, 'INFO');
+      const res = await sendDailyProgram(channelId, activeProgId, dayOfWeek, dateStr);
+      if (res && res.success) {
+        broadcast('PROGRAM_SENT', { date: dateStr, exercisesCount: exercises.length });
+      }
+    } else {
+      db.addLog('[Démarrage] DISCORD_CHANNEL_ID non configuré.', 'WARNING');
+    }
+  } catch (err) {
+    db.addLog(`[Démarrage] Erreur lors de la vérification de l'envoi : ${err.message}`, 'ERROR');
+    console.error('[Startup Check Error]', err);
+  }
+}
+
 // Connexion du bot Discord avec gestion du Token manquant
 function startDiscordBot() {
   const token = process.env.DISCORD_TOKEN;
@@ -347,5 +397,6 @@ module.exports = {
   client,
   startDiscordBot,
   sendDailyProgram,
+  checkAndSendMissedDailyProgram,
   isBotReady: () => isReady
 };
