@@ -145,13 +145,18 @@ document.addEventListener('DOMContentLoaded', () => {
   function initNavigationTabs() {
     const buttons = document.querySelectorAll('.nav-btn');
     buttons.forEach(btn => {
-      btn.addEventListener('click', () => {
-        buttons.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
+      btn.addEventListener('click', (e) => {
+        const targetBtn = e.currentTarget;
+        const targetTab = targetBtn.getAttribute('data-tab');
+        const targetPane = document.getElementById(targetTab);
 
-        const targetTab = btn.getAttribute('data-tab');
+        if (!targetPane) return;
+
+        buttons.forEach(b => b.classList.remove('active'));
+        targetBtn.classList.add('active');
+
         document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
-        document.getElementById(targetTab).classList.add('active');
+        targetPane.classList.add('active');
 
         activeTab = targetTab;
         refreshCurrentTab();
