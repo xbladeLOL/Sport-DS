@@ -436,6 +436,115 @@ function getTodayHistory(dateStr) {
   return db.prepare('SELECT * FROM historique WHERE date = ?').all(dateStr);
 }
 
+function formatLocalDate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function getDayOfWeekFromDateStr(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dateObj = new Date(y, m - 1, d);
+  return dateObj.getDay() === 0 ? 7 : dateObj.getDay();
+}
+
+// Une journée compte pour la streak si : repos, 100 % validé, ou séance terminée avec au moins un exercice fait
+function isStreakEligibleDay(dateStr, activeProgrammeId) {
+  if (!activeProgrammeId) return false;
+
+  const dayOfWeek = getDayOfWeekFromDateStr(dateStr);
+  const planned = getExercisesByProgrammeAndDay(activeProgrammeId, dayOfWeek);
+  if (planned.length === 0) return true;
+
+  const dayLog = db.prepare('SELECT * FROM day_logs WHERE date = ?').get(dateStr);
+  const history = getTodayHistory(dateStr);
+
+  if (dayLog && dayLog.status === 'SUCCESS') return true;
+  if (dayLog && dayLog.session_state === 'ENDED' && (dayLog.exercises_done || 0) > 0) return true;
+  if (history.length > 0 && history.every(h => h.status === 'DONE')) return true;
+
+  return false;
+}
+
+function recalculateStreakFromLogs() {
+  const activeProgId = getActiveProgramId();
+  if (!activeProgId) {
+    return { currentStreak: 0, bestStreak: 0 };
+  }
+
+  const todayStr = formatLocalDate(new Date());
+  const minDateRow = db.prepare(`
+    SELECT MIN(d) as min_date FROM (
+      SELECT date as d FROM day_logs
+      UNION ALL
+      SELECT date as d FROM historique
+    )
+  `).get();
+
+  const minDateStr = minDateRow && minDateRow.min_date ? minDateRow.min_date : todayStr;
+
+  // Meilleure streak : parcours chronologique
+  let bestStreak = 0;
+  let tempStreak = 0;
+  const bestCursor = new Date(minDateStr + 'T12:00:00');
+  const bestEnd = new Date(todayStr + 'T12:00:00');
+
+  while (bestCursor <= bestEnd) {
+    const dStr = formatLocalDate(bestCursor);
+    const dayOfWeek = getDayOfWeekFromDateStr(dStr);
+    const planned = getExercisesByProgrammeAndDay(activeProgId, dayOfWeek);
+
+    if (dStr === todayStr && !isStreakEligibleDay(dStr, activeProgId)) {
+      bestCursor.setDate(bestCursor.getDate() + 1);
+      continue;
+    }
+
+    if (planned.length === 0 || isStreakEligibleDay(dStr, activeProgId)) {
+      tempStreak++;
+      if (tempStreak > bestStreak) bestStreak = tempStreak;
+    } else if (dStr < todayStr) {
+      tempStreak = 0;
+    }
+
+    bestCursor.setDate(bestCursor.getDate() + 1);
+  }
+
+  // Streak actuelle : parcours à rebours depuis aujourd'hui
+  let currentStreak = 0;
+  const currentCursor = new Date(todayStr + 'T12:00:00');
+  const minCursor = new Date(minDateStr + 'T12:00:00');
+
+  while (currentCursor >= minCursor) {
+    const dStr = formatLocalDate(currentCursor);
+    const dayOfWeek = getDayOfWeekFromDateStr(dStr);
+    const planned = getExercisesByProgrammeAndDay(activeProgId, dayOfWeek);
+
+    if (dStr === todayStr) {
+      if (isStreakEligibleDay(dStr, activeProgId)) {
+        currentStreak++;
+      }
+      currentCursor.setDate(currentCursor.getDate() - 1);
+      continue;
+    }
+
+    if (planned.length === 0) {
+      currentStreak++;
+    } else if (isStreakEligibleDay(dStr, activeProgId)) {
+      currentStreak++;
+    } else {
+      break;
+    }
+
+    currentCursor.setDate(currentCursor.getDate() - 1);
+  }
+
+  setParam('current_streak', currentStreak);
+  setParam('best_streak', bestStreak);
+
+  return { currentStreak, bestStreak };
+}
+
 // --- FIN DE JOURNÉE & CALCUL DE STREAK ---
 function closeDayAndCalculateStreak(dateStr, activeProgrammeId, dayOfWeek) {
   const plannedExercises = getExercisesByProgrammeAndDay(activeProgrammeId, dayOfWeek);
@@ -447,9 +556,9 @@ function closeDayAndCalculateStreak(dateStr, activeProgrammeId, dayOfWeek) {
       VALUES (?, 'REST', 0, 0)
     `).run(dateStr);
     
-    incrementStreak();
+    const streakInfo = recalculateStreakFromLogs();
     addLog(`Journée ${dateStr} : Jour de repos validé. Streak maintenue.`, 'INFO');
-    return { status: 'REST', streak: parseInt(getParam('current_streak'), 10) };
+    return { status: 'REST', streak: streakInfo.currentStreak };
   }
 
   const existingHistory = getTodayHistory(dateStr);
@@ -474,20 +583,25 @@ function closeDayAndCalculateStreak(dateStr, activeProgrammeId, dayOfWeek) {
 
   const isFullSuccess = (doneCount === totalCount) && (fullHistory.every(h => h.status === 'DONE'));
 
-  let dayStatus = isFullSuccess ? 'SUCCESS' : 'FAILED';
+  const session = getTodaySession(dateStr);
+  const sessionCompleted = session.session_state === 'ENDED' && doneCount > 0;
+  let dayStatus = isFullSuccess ? 'SUCCESS' : (sessionCompleted ? 'SUCCESS' : 'FAILED');
 
-  db.prepare(`
-    INSERT OR REPLACE INTO day_logs (date, status, exercises_total, exercises_done)
-    VALUES (?, ?, ?, ?)
-  `).run(dateStr, dayStatus, totalCount, doneCount);
-
-  if (isFullSuccess) {
-    incrementStreak();
+  const existingDayLog = db.prepare('SELECT * FROM day_logs WHERE date = ?').get(dateStr);
+  if (existingDayLog) {
+    db.prepare(`
+      UPDATE day_logs SET status = ?, exercises_total = ?, exercises_done = ?
+      WHERE date = ?
+    `).run(dayStatus, totalCount, doneCount, dateStr);
   } else {
-    resetStreak();
+    db.prepare(`
+      INSERT INTO day_logs (date, status, exercises_total, exercises_done, session_state)
+      VALUES (?, ?, ?, ?, 'IDLE')
+    `).run(dateStr, dayStatus, totalCount, doneCount);
   }
 
-  const currentStreak = parseInt(getParam('current_streak'), 10);
+  const streakInfo = recalculateStreakFromLogs();
+  const currentStreak = streakInfo.currentStreak;
   addLog(`Fin de journée ${dateStr} : Statut ${dayStatus} (${doneCount}/${totalCount} validés). Streak: ${currentStreak}`, 'INFO');
 
   return {
@@ -513,10 +627,7 @@ function resetStreak() {
 }
 
 function calculateStreakInfo() {
-  return {
-    currentStreak: parseInt(getParam('current_streak', '0'), 10),
-    bestStreak: parseInt(getParam('best_streak', '0'), 10)
-  };
+  return recalculateStreakFromLogs();
 }
 
 // --- STATISTIQUES AVANCEES ---
@@ -526,15 +637,9 @@ function getStats(daysCount = 30) {
   const startDate = new Date();
   startDate.setDate(endDate.getDate() - (daysCount - 1));
 
-  const formatLocalDate = (d) => {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  };
-
   const startDateStr = formatLocalDate(startDate);
   const endDateStr = formatLocalDate(endDate);
+  const activeProgId = getActiveProgramId();
 
   // Totaux globaux historique
   const totalStats = db.prepare(`
@@ -553,14 +658,15 @@ function getStats(daysCount = 30) {
   const skipped = totalStats.skipped || 0;
   const successRate = total > 0 ? Math.round((done / total) * 100) : 0;
 
-  // Calcul du temps total et moyen d'entraînement
+  // Temps réel des séances (chrono start/end), pas le temps de repos entre séries
   const durationRow = db.prepare(`
-    SELECT 
-      SUM(e.duration_sec) as total_duration,
-      COUNT(DISTINCT h.date) as total_sessions
-    FROM historique h
-    JOIN exercices e ON h.exercice_id = e.id
-    WHERE h.date >= ? AND h.date <= ? AND h.status = 'DONE'
+    SELECT
+      SUM(duration_sec) as total_duration,
+      COUNT(*) as total_sessions
+    FROM day_logs
+    WHERE date >= ? AND date <= ?
+      AND session_state = 'ENDED'
+      AND duration_sec > 0
   `).get(startDateStr, endDateStr);
 
   const totalDurationSec = durationRow.total_duration || 0;
@@ -635,14 +741,17 @@ function getStats(daysCount = 30) {
     const totalCount = (log && log.exercises_total) ? log.exercises_total : (dayHist ? dayHist.total_recorded : 0);
 
     let dayStatus = 'EMPTY'; // 'SUCCESS', 'FAILED', 'REST', 'EMPTY'
-    if (log) {
+    const dayOfWeek = getDayOfWeekFromDateStr(dStr);
+    const plannedCount = activeProgId
+      ? getExercisesByProgrammeAndDay(activeProgId, dayOfWeek).length
+      : 0;
+
+    if (activeProgId && isStreakEligibleDay(dStr, activeProgId)) {
+      dayStatus = plannedCount === 0 ? 'REST' : 'SUCCESS';
+    } else if (log) {
       dayStatus = log.status;
     } else if (dayHist && dayHist.total_recorded > 0) {
-      if (dayHist.d > 0) {
-        dayStatus = 'SUCCESS';
-      } else {
-        dayStatus = 'FAILED';
-      }
+      dayStatus = dayHist.d > 0 ? 'SUCCESS' : 'FAILED';
     }
 
     heatMapDays.push({
